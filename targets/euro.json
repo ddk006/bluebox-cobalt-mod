@@ -1,0 +1,73 @@
+{
+ "firmware": "eurorack 1.5.1",
+ "stock_sha256": "fcb04565e2fd5bc15c0b2d0dc913dc99dc74732611e8cef0d7e8e4bb4af7402b",
+ "ported": [
+  "M7 additional code",
+  "M4 additional code",
+  "M7 compressor telemetry code",
+  "M4 cue icon code",
+  "M7 granular and extended delay code",
+  "M7 adaptive gate code",
+  "M7 phones auto cue code",
+  "M4 PC map code",
+  "Tools mod version label",
+  "purple UI palette slot",
+  "theme palette slot",
+  "knob extended conversion CLUT",
+  "knob outline color",
+  "knob pointer color"
+ ],
+ "replace": {
+  "tools/make_release.py": [
+   {
+    "old": "STOCK_HASH='38a7944c9eed15dac18e2dac89e7574c9112f60b20324d77a4c26ba522607126'",
+    "new": "STOCK_HASH='fcb04565e2fd5bc15c0b2d0dc913dc99dc74732611e8cef0d7e8e4bb4af7402b'",
+    "why": "eurorack 1.5.1 BLUEEURO.BIN"
+   },
+   {
+    "old": "Wrong stock firmware: desktop 1.5.2 exact image required",
+    "new": "Wrong stock firmware: eurorack 1.5.1 exact image required",
+    "why": "message"
+   },
+   {
+    "old": "name='Cobalt for 1010music bluebox desktop'",
+    "new": "name='Cobalt for 1010music bluebox eurorack'",
+    "why": "manifest"
+   },
+   {
+    "old": "firmware='desktop 1.5.2'",
+    "new": "firmware='eurorack 1.5.1'",
+    "why": "manifest"
+   },
+   {
+    "old": "stock[0xcd5ba:0xcd5d8]",
+    "new": "stock[0xcd77a:0xcd798]",
+    "why": "ART set-up 0x0810d5ba is at 0x0810d77a on the euro, same 30 bytes (same hash)"
+   },
+   {
+    "old": "0x10d230",
+    "new": "0x10fd30",
+    "count": 3,
+    "why": "palette .data image 0x0814d230 is at 0x0814fd30 on the euro; the 34 words are identical"
+   },
+   {
+    "old": "0x10d234",
+    "new": "0x10fd34",
+    "count": 2,
+    "why": "end of the same palette word"
+   },
+   {
+    "old": "'2536f7c45a4a9ad8bd7d06474ce395ae1276e7a60b03a901892e823bdcb1a335'",
+    "new": "'416fafbd18e6c96f395982c2e5ffecdf08d1fe8ff7f64515f1ac9a1938c1c1b3'",
+    "why": "stock PCM24 recording converter at 0x08108fb0: same code as the desktop's 0x08108df4, its f2lz call goes to 0x08144624 instead of 0x08141c44"
+   }
+  ],
+  "src/delay_m4.h": [
+   {
+    "old": "\"Cblt 1.2\"",
+    "new": "\"Cblt 1.2e\"",
+    "why": "the Tools page shows the eurorack build"
+   }
+  ]
+ }
+}

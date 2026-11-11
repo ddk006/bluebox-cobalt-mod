@@ -1,0 +1,2152 @@
+{
+ "0x080404d4": {
+  "delta": 0,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080404d4"
+ },
+ "0x080412a4": {
+  "delta": 300,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080413d0"
+ },
+ "0x080412a5": {
+  "delta": 300,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080413d1"
+ },
+ "0x08042364": {
+  "delta": 1092,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x080427a8"
+ },
+ "0x08042648": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08042a90"
+ },
+ "0x08042649": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08042a91"
+ },
+ "0x0804281c": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08042c64"
+ },
+ "0x08042825": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08042c6d"
+ },
+ "0x08042e60": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x080432a8"
+ },
+ "0x08042e61": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x080432a9"
+ },
+ "0x0804304a": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08043492"
+ },
+ "0x08043b91": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x08043fd9"
+ },
+ "0x08044da4": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x080451ec"
+ },
+ "0x08044da5": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x080451ed"
+ },
+ "0x08046e75": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x080472bd"
+ },
+ "0x080489a0": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08048de8"
+ },
+ "0x080489a1": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08048de9"
+ },
+ "0x08049e54": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804a29c"
+ },
+ "0x08049ee2": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804a32a"
+ },
+ "0x0804bab0": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804bef8"
+ },
+ "0x0804bab1": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804bef9"
+ },
+ "0x0804bacc": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804bf14"
+ },
+ "0x0804bacd": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804bf15"
+ },
+ "0x0804bbd8": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804c020"
+ },
+ "0x0804bbf8": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804c040"
+ },
+ "0x0804bbf9": {
+  "delta": 1096,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804c041"
+ },
+ "0x0804c50e": {
+  "delta": 1282,
+  "method": "manual: the only BL to the profiler exit 0x0804c040 (= desktop 0x0804bbf8): ldr r0,[r5]; bl; movs r0,#1; add sp; pop, as on the desktop (the frame is 0x64 instead of 0x3c)",
+  "target": "0x0804ca10"
+ },
+ "0x0804c512": {
+  "delta": 1282,
+  "method": "site 3+0",
+  "target": "0x0804ca14"
+ },
+ "0x0804cd41": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804d4c1"
+ },
+ "0x0804ce19": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804d599"
+ },
+ "0x0804df54": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e6d4"
+ },
+ "0x0804df55": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e6d5"
+ },
+ "0x0804e1b9": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e939"
+ },
+ "0x0804e1e9": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e969"
+ },
+ "0x0804e21c": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e99c"
+ },
+ "0x0804e21d": {
+  "delta": 1920,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0804e99d"
+ },
+ "0x0804f674": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0805002c"
+ },
+ "0x0804f872": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805022a"
+ },
+ "0x0804f8be": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08050276"
+ },
+ "0x0804f8fe": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080502b6"
+ },
+ "0x0804f9c6": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805037e"
+ },
+ "0x0804f9e0": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08050398"
+ },
+ "0x0804fbac": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08050564"
+ },
+ "0x0804fbad": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08050565"
+ },
+ "0x08050c96": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805164e"
+ },
+ "0x08050f1a": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080518d2"
+ },
+ "0x08050f1b": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080518d3"
+ },
+ "0x08050f1e": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080518d6"
+ },
+ "0x08051062": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08051a1a"
+ },
+ "0x0805211c": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08052ad4"
+ },
+ "0x0805216c": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08052b24"
+ },
+ "0x08052478": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08052e30"
+ },
+ "0x08052479": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08052e31"
+ },
+ "0x0805287c": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053234"
+ },
+ "0x08052bbc": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08053574"
+ },
+ "0x08052bdc": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053594"
+ },
+ "0x08052c8c": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08053644"
+ },
+ "0x08052cd0": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053688"
+ },
+ "0x08052d00": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080536b8"
+ },
+ "0x08052d4e": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053706"
+ },
+ "0x08052d68": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08053720"
+ },
+ "0x08052e5e": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053816"
+ },
+ "0x08052ea4": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805385c"
+ },
+ "0x08052f34": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x080538ec"
+ },
+ "0x08053179": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053b31"
+ },
+ "0x08053198": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08053b50"
+ },
+ "0x080532d5": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08053c8d"
+ },
+ "0x0805331d": {
+  "delta": 2488,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08053cd5"
+ },
+ "0x08055620": {
+  "delta": 2456,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08055fb8"
+ },
+ "0x08055c75": {
+  "delta": 2456,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805660d"
+ },
+ "0x08058b1c": {
+  "delta": 2408,
+  "method": "search 64+16",
+  "target": "0x08059484"
+ },
+ "0x080593ec": {
+  "delta": 2408,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08059d54"
+ },
+ "0x080596b0": {
+  "delta": 2336,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08059fd0"
+ },
+ "0x0805a445": {
+  "delta": 2336,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805ad65"
+ },
+ "0x0805a486": {
+  "delta": 2336,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805ada6"
+ },
+ "0x0805a79c": {
+  "delta": 2336,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0805b0bc"
+ },
+ "0x0805a888": {
+  "delta": 2336,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0805b1a8"
+ },
+ "0x0806a24c": {
+  "delta": 2652,
+  "method": "search 32+32",
+  "target": "0x0806aca8"
+ },
+ "0x0806a2a8": {
+  "delta": 2672,
+  "method": "table 14 ptrs",
+  "target": "0x0806ad18"
+ },
+ "0x0806a2b4": {
+  "delta": 2672,
+  "method": "table 14 ptrs",
+  "target": "0x0806ad24"
+ },
+ "0x0806a33c": {
+  "delta": 2672,
+  "method": "table 13 ptrs",
+  "target": "0x0806adac"
+ },
+ "0x0806aa00": {
+  "delta": 2652,
+  "method": "table 14 ptrs",
+  "target": "0x0806b45c"
+ },
+ "0x0806af2c": {
+  "delta": 2652,
+  "method": "table 14 ptrs",
+  "target": "0x0806b988"
+ },
+ "0x0806af38": {
+  "delta": 2652,
+  "method": "table 14 ptrs",
+  "target": "0x0806b994"
+ },
+ "0x0806b014": {
+  "delta": 2652,
+  "method": "table 12 ptrs",
+  "target": "0x0806ba70"
+ },
+ "0x08089ee8": {
+  "delta": 2612,
+  "method": "search 16+48",
+  "target": "0x0808a91c"
+ },
+ "0x081004d4": {
+  "delta": 0,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081004d4"
+ },
+ "0x08100b19": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08100b51"
+ },
+ "0x08101064": {
+  "delta": 56,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x0810109c"
+ },
+ "0x081010de": {
+  "delta": 56,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08101116"
+ },
+ "0x08101104": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810113c"
+ },
+ "0x0810134c": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101384"
+ },
+ "0x0810134d": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101385"
+ },
+ "0x0810139a": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081013d2"
+ },
+ "0x0810139b": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081013d3"
+ },
+ "0x08101408": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101440"
+ },
+ "0x08101660": {
+  "delta": 56,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101698"
+ },
+ "0x0810204e": {
+  "delta": 40,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08102076"
+ },
+ "0x0810204f": {
+  "delta": 40,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08102077"
+ },
+ "0x08102a4c": {
+  "delta": 60,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08102a88"
+ },
+ "0x0810311c": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08102f40"
+ },
+ "0x08103128": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08102f4c"
+ },
+ "0x08103129": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08102f4d"
+ },
+ "0x0810329f": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081030c3"
+ },
+ "0x08103370": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08103194"
+ },
+ "0x08103378": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810319c"
+ },
+ "0x0810337c": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031a0"
+ },
+ "0x08103380": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031a4"
+ },
+ "0x08103386": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031aa"
+ },
+ "0x08103390": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031b4"
+ },
+ "0x081033ba": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031de"
+ },
+ "0x081033c0": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081031e4"
+ },
+ "0x081033e0": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08103204"
+ },
+ "0x081033e6": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810320a"
+ },
+ "0x0810341a": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810323e"
+ },
+ "0x0810343a": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810325e"
+ },
+ "0x08103bb8": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081039dc"
+ },
+ "0x08103bee": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08103a12"
+ },
+ "0x08103c3e": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08103a62"
+ },
+ "0x08103c62": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08103a86"
+ },
+ "0x08103dc8": {
+  "delta": -476,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08103bec"
+ },
+ "0x08104158": {
+  "delta": -476,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08103f7c"
+ },
+ "0x08104481": {
+  "delta": -476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081042a5"
+ },
+ "0x0810596c": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08105aec"
+ },
+ "0x08106ae8": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106c68"
+ },
+ "0x08106ae9": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106c69"
+ },
+ "0x08106b2b": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106cab"
+ },
+ "0x08106c92": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106e12"
+ },
+ "0x08106c93": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106e13"
+ },
+ "0x08106d9e": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106f1e"
+ },
+ "0x08106d9f": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106f1f"
+ },
+ "0x08106dba": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106f3a"
+ },
+ "0x08106dc6": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106f46"
+ },
+ "0x08106dc7": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08106f47"
+ },
+ "0x0810747c": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081075fc"
+ },
+ "0x0810747d": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081075fd"
+ },
+ "0x081074a6": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107626"
+ },
+ "0x081074dc": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810765c"
+ },
+ "0x081074dd": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810765d"
+ },
+ "0x081078c0": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107a40"
+ },
+ "0x081079c0": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107b40"
+ },
+ "0x081079c1": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107b41"
+ },
+ "0x08107b16": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107c96"
+ },
+ "0x08107b17": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107c97"
+ },
+ "0x08107e24": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08107fa4"
+ },
+ "0x08108784": {
+  "delta": 384,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08108904"
+ },
+ "0x081087e8": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108968"
+ },
+ "0x081087e9": {
+  "delta": 384,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108969"
+ },
+ "0x08108950": {
+  "delta": 440,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08108b08"
+ },
+ "0x08108c8c": {
+  "delta": 444,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108e48"
+ },
+ "0x08108cd4": {
+  "delta": 444,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108e90"
+ },
+ "0x08108d44": {
+  "delta": 444,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108f00"
+ },
+ "0x08108df4": {
+  "delta": 444,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08108fb0"
+ },
+ "0x0810a8d0": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810aa90"
+ },
+ "0x0810aa28": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810abe8"
+ },
+ "0x0810aa50": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810ac10"
+ },
+ "0x0810aa6c": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810ac2c"
+ },
+ "0x0810adc8": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810af88"
+ },
+ "0x0810aece": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810b08e"
+ },
+ "0x0810af54": {
+  "delta": 448,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0810b114"
+ },
+ "0x0810c312": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0810c4d2"
+ },
+ "0x0811085c": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08110a1c"
+ },
+ "0x0811085d": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08110a1d"
+ },
+ "0x08112b9a": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08112d5a"
+ },
+ "0x0811a4ac": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0811a66c"
+ },
+ "0x0811a64c": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0811a80c"
+ },
+ "0x0811a9dc": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0811ab9c"
+ },
+ "0x0811b78a": {
+  "delta": 448,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0811b94a"
+ },
+ "0x0811e920": {
+  "delta": 1192,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0811edc8"
+ },
+ "0x0811e921": {
+  "delta": 1192,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0811edc9"
+ },
+ "0x08120234": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120588"
+ },
+ "0x08120235": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120589"
+ },
+ "0x08120264": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081205b8"
+ },
+ "0x08120265": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081205b9"
+ },
+ "0x0812028e": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081205e2"
+ },
+ "0x0812028f": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081205e3"
+ },
+ "0x081202b8": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812060c"
+ },
+ "0x08120534": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120888"
+ },
+ "0x08120538": {
+  "delta": 852,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812088c"
+ },
+ "0x08120848": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120b90"
+ },
+ "0x08120872": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120bba"
+ },
+ "0x0812092c": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120c74"
+ },
+ "0x08120a25": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120d6d"
+ },
+ "0x08120a52": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120d9a"
+ },
+ "0x08120a56": {
+  "delta": 840,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08120d9e"
+ },
+ "0x08120aae": {
+  "delta": 828,
+  "method": "manual: last stock add (0x081205e2) of the settings parameter set built after the capacity movs r1,#0x44 at 0x08120d9e; the euro list ends with id 0x117 instead of 0x204, pc_settings_defaults forwards the original arguments",
+  "target": "0x08120dea"
+ },
+ "0x08120abc": {
+  "delta": 2304,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x081213bc"
+ },
+ "0x08120b84": {
+  "delta": 2304,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08121484"
+ },
+ "0x08120b85": {
+  "delta": 2304,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08121485"
+ },
+ "0x08120c3c": {
+  "delta": 2304,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x0812153c"
+ },
+ "0x08120c3d": {
+  "delta": 2304,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x0812153d"
+ },
+ "0x08121b50": {
+  "delta": 2608,
+  "method": "site 4+2",
+  "target": "0x08122580"
+ },
+ "0x08121cf4": {
+  "delta": 2812,
+  "method": "manual: same function as the desktop's (cells 0x0b / 0x14 / 0x18 compared in the same order, same calls), other register allocation; the BLs at the mapped sites 0x0812bcca and 0x0813fba2 call it",
+  "target": "0x081227f0"
+ },
+ "0x08121cf5": {
+  "delta": 2812,
+  "method": "manual: same function as the desktop's (cells 0x0b / 0x14 / 0x18 compared in the same order, same calls), other register allocation; the BLs at the mapped sites 0x0812bcca and 0x0813fba2 call it",
+  "target": "0x081227f1"
+ },
+ "0x08121e82": {
+  "delta": 2852,
+  "method": "search 24+12",
+  "target": "0x081229a6"
+ },
+ "0x08121f4c": {
+  "delta": 3140,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08122b90"
+ },
+ "0x08121fc4": {
+  "delta": 3140,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x08122c08"
+ },
+ "0x08122458": {
+  "delta": 3152,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x081230a8"
+ },
+ "0x08122459": {
+  "delta": 3152,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x081230a9"
+ },
+ "0x08122468": {
+  "delta": 3152,
+  "method": "code 11/12 insns, 5/6 before",
+  "target": "0x081230b8"
+ },
+ "0x08122469": {
+  "delta": 3152,
+  "method": "code 11/12 insns, 5/6 before",
+  "target": "0x081230b9"
+ },
+ "0x08122508": {
+  "delta": 3152,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08123158"
+ },
+ "0x08122509": {
+  "delta": 3152,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08123159"
+ },
+ "0x081227f8": {
+  "delta": 3152,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08123448"
+ },
+ "0x08122e3c": {
+  "delta": 3156,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x08123a90"
+ },
+ "0x08122e3d": {
+  "delta": 3156,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x08123a91"
+ },
+ "0x08122f50": {
+  "delta": 3156,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08123ba4"
+ },
+ "0x08122f51": {
+  "delta": 3156,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08123ba5"
+ },
+ "0x08123818": {
+  "delta": 3160,
+  "method": "code 11/12 insns, 2/6 before",
+  "target": "0x08124470"
+ },
+ "0x08123819": {
+  "delta": 3160,
+  "method": "code 11/12 insns, 2/6 before",
+  "target": "0x08124471"
+ },
+ "0x08123862": {
+  "delta": 3160,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x081244ba"
+ },
+ "0x081238d2": {
+  "delta": 3160,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812452a"
+ },
+ "0x08123902": {
+  "delta": 3160,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812455a"
+ },
+ "0x081239e0": {
+  "delta": 3160,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08124638"
+ },
+ "0x08123a42": {
+  "delta": 3160,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x0812469a"
+ },
+ "0x081247c8": {
+  "delta": 4112,
+  "method": "code 11/12 insns, 5/6 before",
+  "target": "0x081257d8"
+ },
+ "0x08124b44": {
+  "delta": 4116,
+  "method": "code 11/12 insns, 0/6 before",
+  "target": "0x08125b58"
+ },
+ "0x08124b45": {
+  "delta": 4116,
+  "method": "code 11/12 insns, 0/6 before",
+  "target": "0x08125b59"
+ },
+ "0x08125e2a": {
+  "delta": 4472,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x08126fa2"
+ },
+ "0x08126fc0": {
+  "delta": 4180,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08128014"
+ },
+ "0x08127104": {
+  "delta": 4180,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08128158"
+ },
+ "0x08127308": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08128354"
+ },
+ "0x08127309": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08128355"
+ },
+ "0x081278b0": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081288fc"
+ },
+ "0x081278b1": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081288fd"
+ },
+ "0x08127a08": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08128a54"
+ },
+ "0x08127b84": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08128bd0"
+ },
+ "0x08127b85": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08128bd1"
+ },
+ "0x08127d38": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08128d84"
+ },
+ "0x08127d50": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08128d9c"
+ },
+ "0x08127d51": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08128d9d"
+ },
+ "0x08127e98": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08128ee4"
+ },
+ "0x0812808c": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081290d8"
+ },
+ "0x08128128": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08129174"
+ },
+ "0x081281b6": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08129202"
+ },
+ "0x08128224": {
+  "delta": 4172,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08129270"
+ },
+ "0x081282a6": {
+  "delta": 4172,
+  "method": "bytes 20/20 after, 24/24 before",
+  "target": "0x081292f2"
+ },
+ "0x08129d84": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812ae04"
+ },
+ "0x0812a600": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812b680"
+ },
+ "0x0812a98c": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812ba0c"
+ },
+ "0x0812ab7c": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 1/6 before",
+  "target": "0x0812bbfc"
+ },
+ "0x0812abe0": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bc60"
+ },
+ "0x0812abe1": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bc61"
+ },
+ "0x0812ac1c": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bc9c"
+ },
+ "0x0812ac38": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bcb8"
+ },
+ "0x0812ac3c": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bcbc"
+ },
+ "0x0812ac4a": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bcca"
+ },
+ "0x0812ae5e": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bede"
+ },
+ "0x0812af04": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x0812bf84"
+ },
+ "0x0812af10": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bf90"
+ },
+ "0x0812af42": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bfc2"
+ },
+ "0x0812af4e": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812bfce"
+ },
+ "0x0812afd8": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812c058"
+ },
+ "0x0812afd9": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812c059"
+ },
+ "0x0812b006": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c086"
+ },
+ "0x0812b090": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c110"
+ },
+ "0x0812b091": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c111"
+ },
+ "0x0812b460": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812c4e0"
+ },
+ "0x0812b461": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812c4e1"
+ },
+ "0x0812b4aa": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c52a"
+ },
+ "0x0812b4c4": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c544"
+ },
+ "0x0812b4d4": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c554"
+ },
+ "0x0812b51a": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812c59a"
+ },
+ "0x0812b678": {
+  "delta": 4224,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812c6f8"
+ },
+ "0x0812c914": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0812d9cc"
+ },
+ "0x0812d432": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812e4ea"
+ },
+ "0x0812d43f": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812e4f7"
+ },
+ "0x0812d507": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812e5bf"
+ },
+ "0x0812d6fd": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812e7b5"
+ },
+ "0x0812d72f": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812e7e7"
+ },
+ "0x0812dadc": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812eb94"
+ },
+ "0x0812dadd": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812eb95"
+ },
+ "0x0812dde8": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812eea0"
+ },
+ "0x0812dde9": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812eea1"
+ },
+ "0x0812e2e0": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x0812f398"
+ },
+ "0x0812e2e1": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x0812f399"
+ },
+ "0x0812e3e0": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f498"
+ },
+ "0x0812e468": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812f520"
+ },
+ "0x0812e469": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0812f521"
+ },
+ "0x0812e4c0": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f578"
+ },
+ "0x0812e4d0": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f588"
+ },
+ "0x0812e4d8": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f590"
+ },
+ "0x0812e54c": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f604"
+ },
+ "0x0812e54d": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f605"
+ },
+ "0x0812e6a4": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f75c"
+ },
+ "0x0812e754": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x0812f810"
+ },
+ "0x0812e755": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x0812f811"
+ },
+ "0x0812e77e": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f83a"
+ },
+ "0x0812e7ea": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f8a6"
+ },
+ "0x0812e830": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f8ec"
+ },
+ "0x0812e84e": {
+  "delta": 4284,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0812f90a"
+ },
+ "0x08131210": {
+  "delta": 4288,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x081322d0"
+ },
+ "0x08131211": {
+  "delta": 4288,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x081322d1"
+ },
+ "0x0813140c": {
+  "delta": 4288,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081324cc"
+ },
+ "0x081314a0": {
+  "delta": 4288,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08132560"
+ },
+ "0x081323b8": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08133470"
+ },
+ "0x081327cc": {
+  "delta": 4280,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08133884"
+ },
+ "0x081328f8": {
+  "delta": 4280,
+  "method": "search 96+8",
+  "target": "0x081339b0"
+ },
+ "0x081328f9": {
+  "delta": 4280,
+  "method": "search 96+8",
+  "target": "0x081339b1"
+ },
+ "0x08132e39": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08133f51"
+ },
+ "0x08132ed4": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08133fec"
+ },
+ "0x08133194": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x081342ac"
+ },
+ "0x081331c0": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081342d8"
+ },
+ "0x081331dc": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081342f4"
+ },
+ "0x081331fe": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08134316"
+ },
+ "0x08133248": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08134360"
+ },
+ "0x0813408e": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x081351a6"
+ },
+ "0x08134092": {
+  "delta": 4376,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x081351aa"
+ },
+ "0x08134586": {
+  "delta": 4386,
+  "method": "code 11/12 insns, 4/6 before",
+  "target": "0x081356a8"
+ },
+ "0x081349dc": {
+  "delta": 4456,
+  "method": "manual: MIXER page constructor: push; bl base ctor; store vtable; add.w r0,r4,#0x558 (desktop 0x4e8); the only BL to 0x0812eb94 (= desktop 0x0812dadc)",
+  "target": "0x08135b44"
+ },
+ "0x08134c06": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08135d82"
+ },
+ "0x08134c39": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08135db5"
+ },
+ "0x08134c8c": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08135e08"
+ },
+ "0x08134c8d": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08135e09"
+ },
+ "0x08134cb8": {
+  "delta": 4476,
+  "method": "search 96+8",
+  "target": "0x08135e34"
+ },
+ "0x08134cce": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08135e4a"
+ },
+ "0x08134ce0": {
+  "delta": 4476,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08135e5c"
+ },
+ "0x081358dc": {
+  "delta": 4478,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08136a5a"
+ },
+ "0x08135b28": {
+  "delta": 4476,
+  "method": "table 12 ptrs",
+  "target": "0x08136ca4"
+ },
+ "0x08135fec": {
+  "delta": 4446,
+  "method": "site 4+2",
+  "target": "0x0813714a"
+ },
+ "0x0813600c": {
+  "delta": 4440,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08137164"
+ },
+ "0x0813603a": {
+  "delta": 4440,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08137192"
+ },
+ "0x08136065": {
+  "delta": 4440,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081371bd"
+ },
+ "0x0813606c": {
+  "delta": 4440,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081371c4"
+ },
+ "0x08136094": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08137218"
+ },
+ "0x08136095": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08137219"
+ },
+ "0x0813609a": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 1/6 before",
+  "target": "0x0813721e"
+ },
+ "0x081360ca": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813724e"
+ },
+ "0x081360fa": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813727e"
+ },
+ "0x08136134": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081372b8"
+ },
+ "0x0813613c": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081372c0"
+ },
+ "0x08136164": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081372e8"
+ },
+ "0x08136180": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08137304"
+ },
+ "0x081364da": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0813765e"
+ },
+ "0x081364db": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0813765f"
+ },
+ "0x081371d1": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08138355"
+ },
+ "0x0813723c": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081383c0"
+ },
+ "0x0813723d": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081383c1"
+ },
+ "0x08137458": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081385dc"
+ },
+ "0x08137496": {
+  "delta": 4484,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x0813861a"
+ },
+ "0x08137698": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813881c"
+ },
+ "0x0813774e": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081388d2"
+ },
+ "0x081377f4": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08138978"
+ },
+ "0x081378ae": {
+  "delta": 4484,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08138a32"
+ },
+ "0x08137be8": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 1/6 before",
+  "target": "0x08139100"
+ },
+ "0x08137d04": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813921c"
+ },
+ "0x08137de0": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x081392f8"
+ },
+ "0x08137e44": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813935c"
+ },
+ "0x08137fbc": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081394d4"
+ },
+ "0x08138154": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813966c"
+ },
+ "0x0813820c": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08139724"
+ },
+ "0x0813820d": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08139725"
+ },
+ "0x08138220": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08139738"
+ },
+ "0x08138221": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08139739"
+ },
+ "0x081384d1": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081399e9"
+ },
+ "0x08138505": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08139a1d"
+ },
+ "0x08138546": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08139a5e"
+ },
+ "0x08138547": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08139a5f"
+ },
+ "0x08139586": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813aa9e"
+ },
+ "0x08139587": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813aa9f"
+ },
+ "0x0813961c": {
+  "delta": 5400,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ab34"
+ },
+ "0x081397b8": {
+  "delta": 5552,
+  "method": "code 11/12 insns, 0/6 before",
+  "target": "0x0813ad68"
+ },
+ "0x08139aa9": {
+  "delta": 5708,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0813b0f5"
+ },
+ "0x08139aec": {
+  "delta": 5708,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813b138"
+ },
+ "0x08139aed": {
+  "delta": 5708,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813b139"
+ },
+ "0x08139b74": {
+  "delta": 5708,
+  "method": "site 4+2",
+  "target": "0x0813b1c0"
+ },
+ "0x0813a1f8": {
+  "delta": 5712,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x0813b848"
+ },
+ "0x0813a244": {
+  "delta": 5712,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813b894"
+ },
+ "0x0813a25e": {
+  "delta": 5712,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813b8ae"
+ },
+ "0x0813a414": {
+  "delta": 5712,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ba64"
+ },
+ "0x0813a415": {
+  "delta": 5712,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ba65"
+ },
+ "0x0813b295": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813c8fd"
+ },
+ "0x0813b7e8": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ce50"
+ },
+ "0x0813b7e9": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ce51"
+ },
+ "0x0813b804": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ce6c"
+ },
+ "0x0813b805": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ce6d"
+ },
+ "0x0813b86e": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813ced6"
+ },
+ "0x0813bbc4": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0813d22c"
+ },
+ "0x0813c004": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813d66c"
+ },
+ "0x0813c075": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x0813d6dd"
+ },
+ "0x0813c0ab": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813d713"
+ },
+ "0x0813c203": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813d86b"
+ },
+ "0x0813c2d1": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813d939"
+ },
+ "0x0813c384": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813d9ec"
+ },
+ "0x0813c385": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813d9ed"
+ },
+ "0x0813ca95": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813e0fd"
+ },
+ "0x0813cb79": {
+  "delta": 5736,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813e1e1"
+ },
+ "0x0813cfb8": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813f950"
+ },
+ "0x0813cfb9": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813f951"
+ },
+ "0x0813d20a": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0813fba2"
+ },
+ "0x0813d3a8": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x0813fd40"
+ },
+ "0x0813d89c": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08140234"
+ },
+ "0x0813d89d": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08140235"
+ },
+ "0x0813dd91": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08140729"
+ },
+ "0x0813dfba": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08140952"
+ },
+ "0x0813e16e": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08140b06"
+ },
+ "0x0813e390": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 3/6 before",
+  "target": "0x08140d28"
+ },
+ "0x0813e5c0": {
+  "delta": 10648,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x08140f58"
+ },
+ "0x0813e822": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081411ba"
+ },
+ "0x0813e8a2": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0814123a"
+ },
+ "0x0813f496": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08141e2e"
+ },
+ "0x0813fe4a": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081427e2"
+ },
+ "0x0813fe4b": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x081427e3"
+ },
+ "0x081403b2": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08142d4a"
+ },
+ "0x081403c4": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08142d5c"
+ },
+ "0x081403c5": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08142d5d"
+ },
+ "0x081405ad": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 5/6 before",
+  "target": "0x08142f45"
+ },
+ "0x08140a5d": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 4/6 before",
+  "target": "0x081433f5"
+ },
+ "0x08140c9d": {
+  "delta": 10710,
+  "method": "code 12/12 insns, 0/6 before",
+  "target": "0x08143673"
+ },
+ "0x08141548": {
+  "delta": 10720,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08143f28"
+ },
+ "0x08145d38": {
+  "delta": 10724,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0814871c"
+ },
+ "0x08146914": {
+  "delta": 10844,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08149370"
+ },
+ "0x08146bd0": {
+  "delta": 10864,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x08149640"
+ },
+ "0x08148664": {
+  "delta": 10892,
+  "method": "search 96+8",
+  "target": "0x0814b0f0"
+ },
+ "0x0814ae3c": {
+  "delta": 10900,
+  "method": "bytes 20/20 after, 24/24 before",
+  "target": "0x0814d8d0"
+ },
+ "0x0814aea2": {
+  "delta": 10948,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0814d966"
+ },
+ "0x0814af64": {
+  "delta": 10924,
+  "method": "search 64+64",
+  "target": "0x0814da10"
+ },
+ "0x0814b594": {
+  "delta": 10904,
+  "method": "table 12 ptrs",
+  "target": "0x0814e02c"
+ },
+ "0x0814b5c4": {
+  "delta": 10904,
+  "method": "table 12 ptrs",
+  "target": "0x0814e05c"
+ },
+ "0x0814b7d4": {
+  "delta": 10904,
+  "method": "bytes 24/24 after, 0/0 before",
+  "target": "0x0814e26c"
+ },
+ "0x0814b7d8": {
+  "delta": 10904,
+  "method": "bytes 28/28 after, 0/0 before",
+  "target": "0x0814e270"
+ },
+ "0x0814b7f4": {
+  "delta": 10904,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x0814e28c"
+ },
+ "0x0814ba3c": {
+  "delta": 10904,
+  "method": "table 8 ptrs",
+  "target": "0x0814e4d4"
+ },
+ "0x0814bb6c": {
+  "delta": 10904,
+  "method": "table 12 ptrs",
+  "target": "0x0814e604"
+ },
+ "0x0814bf34": {
+  "delta": 10904,
+  "method": "manual: word pair -> \"CUE\", \"MAIN\" in the M4 rodata (the other pair at 0x0806bdc8 is M7 data); delta +0x2a98 as the rest of this table area",
+  "target": "0x0814e9cc"
+ },
+ "0x0814c62c": {
+  "delta": 10876,
+  "method": "table 8 ptrs",
+  "target": "0x0814f0a8"
+ },
+ "0x0814ca40": {
+  "delta": 11008,
+  "method": "table 7 ptrs",
+  "target": "0x0814f540"
+ },
+ "0x0814cac4": {
+  "delta": 11008,
+  "method": "table 7 ptrs",
+  "target": "0x0814f5c4"
+ },
+ "0x0814cb14": {
+  "delta": 11008,
+  "method": "table 8 ptrs",
+  "target": "0x0814f614"
+ },
+ "0x0814d230": {
+  "delta": 11008,
+  "method": "bytes 32/32 after, 24/24 before",
+  "target": "0x0814fd30"
+ }
+}

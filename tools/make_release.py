@@ -1,6 +1,6 @@
 """Build the standalone patcher from compiled code; no stock firmware is shipped."""
 from html import escape
-import base64,hashlib,json,pathlib,struct,sys
+import base64,hashlib,json,os,pathlib,re,struct,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 STOCK_HASH='38a7944c9eed15dac18e2dac89e7574c9112f60b20324d77a4c26ba522607126'
 def branch(at,target):
@@ -14,7 +14,10 @@ if len(sys.argv)!=2:raise SystemExit('Usage: ./build.sh /path/to/stock/BLUEBOX.B
 stock=pathlib.Path(sys.argv[1]).read_bytes()
 if hashlib.sha256(stock).hexdigest()!=STOCK_HASH:raise SystemExit('Wrong stock firmware: desktop 1.5.2 exact image required')
 patched=bytearray(stock);patches=[]
+# Ports (tools/retarget.py) leave out the patches of features not ported yet.
+SKIP=re.compile(os.environ['COBALT_SKIP']) if os.environ.get('COBALT_SKIP') else None
 def add(name,address,old,new):
+    if SKIP and SKIP.search(name):return
     offset=address-0x08040000
     if len(old)!=len(new) or stock[offset:offset+len(old)]!=old:raise ValueError('Unexpected original bytes: '+name)
     for p in patches:

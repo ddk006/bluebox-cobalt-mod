@@ -1,0 +1,7 @@
+{
+ "0x0804c50e": {"target": "0x0804ca10", "evidence": "the only BL to the profiler exit 0x0804c040 (= desktop 0x0804bbf8): ldr r0,[r5]; bl; movs r0,#1; add sp; pop, as on the desktop (the frame is 0x64 instead of 0x3c)"},
+ "0x08120aae": {"target": "0x08120dea", "evidence": "last stock add (0x081205e2) of the settings parameter set built after the capacity movs r1,#0x44 at 0x08120d9e; the euro list ends with id 0x117 instead of 0x204, pc_settings_defaults forwards the original arguments"},
+ "0x08121cf4": {"target": "0x081227f0", "evidence": "same function as the desktop's (cells 0x0b / 0x14 / 0x18 compared in the same order, same calls), other register allocation; the BLs at the mapped sites 0x0812bcca and 0x0813fba2 call it"},
+ "0x081349dc": {"target": "0x08135b44", "evidence": "MIXER page constructor: push; bl base ctor; store vtable; add.w r0,r4,#0x558 (desktop 0x4e8); the only BL to 0x0812eb94 (= desktop 0x0812dadc)"},
+ "0x0814bf34": {"target": "0x0814e9cc", "evidence": "word pair -> \"CUE\", \"MAIN\" in the M4 rodata (the other pair at 0x0806bdc8 is M7 data); delta +0x2a98 as the rest of this table area"}
+}
