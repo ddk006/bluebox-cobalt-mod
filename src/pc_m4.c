@@ -27,7 +27,8 @@ static void sc_boot(void);
 #define PC_BANKNUM_ROW 0x28eu
 #define PC_CH 0x28fu /* settings "PC Ch" (key scenech): 0 All, 1 None, 2..17 = MIDI channel 1..16;
                          filters both Bank Select and Program Change */
-#define PC_BANK_CH 0x290u /* s3/s3.1 "Bank Ch": unused since s3.2, kept so settings.tml still parses */
+#define PC_BANK_CH 0x290u /* s3/s3.1 "Bank Ch": unused since s3.2; now the scene fade (below) */
+#define PC_FADE PC_BANK_CH /* scene crossfade time, settings tag "scenefade", a row on the scene page */
 #define PC_MIDI_ROW 0x291u /* Tools row "MIDI Settings": a tap, or B with the row selected, opens the MIDI page */
 #define PC_DIN_OUT 0x292u /* m3 MIDI page "DIN Out" (key dinout): 0 Default, 1 USB Thru, 2 All Thru */
 #define PC_CC_SYNC 0x293u /* m8 MIDI page "Map CC Sync" (key ccsync, was m3 dinsync): 0 Off, 1 USB, 2 USB+MIDI Out, 3 MIDI Out */
@@ -164,7 +165,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     STOCK_DEF(table,PC_SAVE_ROW,1,"Save Scene:",1,16,"scenesave");
     def_enum(table,PC_BANKNUM_ROW,"Bank #:",bank_num,PC_SLOTS+1,"bankassign"); /* 0 shows "None" */
     def_enum(table,PC_CH,"PC Ch:",channels,18,"scenech");
-    def_enum(table,PC_BANK_CH,"Bank Ch:",channels,18,"bankch");
+    static const char *const fade[9]={"Off","0.1 s","0.25 s","0.5 s","1 s","2 s","4 s","8 s","16 s"};
+    def_enum(table,PC_FADE,"Fade:",fade,9,"scenefade");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -180,7 +182,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     for(unsigned i=0;i<PC_SLOTS;i++)STOCK_ADD(set,PC_TAG0+i,0);
     STOCK_ADD(set,PC_BANK_CC,0);   /* MIDI page */
     STOCK_ADD(set,PC_CH,0);        /* All */
-    STOCK_ADD(set,PC_BANK_CH,0);   /* unused */
+    STOCK_ADD(set,PC_FADE,0);      /* scene fade: Off */
     STOCK_ADD(set,PC_MIDI_ROW,0);  /* Tools row; a tap opens the MIDI page */
     STOCK_ADD(set,PC_DIN_OUT,0);   /* MIDI page: Default */
     STOCK_ADD(set,PC_CC_SYNC,1);   /* MIDI page: USB */
@@ -466,6 +468,7 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
         append(list,PC_SCENE_ROW,(int)*sc_field(F_SEL_SCENE));
         append(list,PC_SAVE_ROW,(int)*sc_field(F_SEL_SAVE));
         append(list,PC_BANKNUM_ROW,(int)*sc_field(F_SEL_BANK));
+        append(list,PC_FADE,fw_get(PC_SETTINGS,PC_FADE));
         return 1;
     }
     if(*cell==PC_CELL_MIDI){
@@ -487,6 +490,12 @@ static unsigned pc_clamp(int v,unsigned lo,unsigned hi) {return v<(int)lo ? lo :
 void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
     typedef void (*knob_fn)(void *,uint16_t *,unsigned,int,int);
     knob_fn knob=(knob_fn)0x08124b45u;
+    if(*cell==PC_CELL_SCENES && id==PC_FADE){
+        uint16_t settings=0x18;
+        knob(session,&settings,id,value,extra);
+        pc_save();
+        return;
+    }
     if(*cell==PC_CELL_SCENES){
         if(!sc_bank())return;
         if(id==PC_SCENE_ROW)*sc_field(F_SEL_SCENE)=pc_clamp(value,1,16);
@@ -898,6 +907,9 @@ struct sc_bank {
     uint32_t mo_clk_usb;
     /* m7: Clock Src value last seen + 1 (0 before the first look), for the band */
     uint32_t mo_clk_seen;
+    /* f1: crossfade of a recall: start time, length (0: none), values at the start */
+    uint32_t fade_at,fade_ms;
+    int32_t from[SC_MAX];
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
 #define SC_PTR ((volatile struct sc_ptr *)0x38800fd0u)
@@ -960,6 +972,7 @@ static void sc_boot(void) {
     b->scroll_key=0;b->scroll_at=0;b->scroll_off=0;
     b->mo_attached=0;b->mo_loading=0;b->mo_pending=0;b->mo_at=0;b->mo_flip=0;b->mo_mark=0;b->mo_count=0;
     b->mo_dumping=0;b->mo_cursor=0;b->mo_busy_since=0;b->mo_din=0;b->mo_to=0;b->mo_clk_src=0;b->mo_clk_at=0;b->mo_clk_usb=0;b->mo_clk_seen=0;
+    b->fade_at=0;b->fade_ms=0;
     b->magic=SC_MAGIC;
     p->bank=b;p->magic=SC_MAGIC;
 }
@@ -1020,6 +1033,23 @@ static void sc_recall(unsigned scene) {
     struct sc_bank *b=sc_bank();
     if(!b || scene<1u || scene>SC_SCENES || !(b->used>>(scene-1u)&1u))return;
     b->recall=scene;b->cursor=0;
+    /* Crossfade: continuous values move from where they are now; the rest
+     * (switches, modes, lists) change when the fade ends. */
+    static const uint16_t fade_ms[9]={0,100,250,500,1000,2000,4000,8000,16000};
+    unsigned f=(unsigned)fw_get(PC_SETTINGS,PC_FADE);
+    b->fade_ms=f<9u ? fade_ms[f] : 0u;
+    b->fade_at=PC_UI_NOW;
+    if(b->fade_ms)for(unsigned j=0;j<b->n;j++)b->from[j]=sc_get(b->item[j].cell,b->item[j].id);
+}
+/* Parameter definitions (28 bytes per id: type at +2, min/max at +16/+20):
+ * dB (7), 0..1000 (8), pan (9) and plain numbers with a wide range glide. */
+#define SC_DEFS (*(uint8_t *volatile *)0x3001eb30u)
+static int sc_glides(unsigned id) {
+    const uint8_t *d=SC_DEFS;
+    if(!pc_ram((uint32_t)d,(id+1u)*28u))return 0;
+    d+=id*28u;
+    int lo=*(const int32_t *)(d+16),hi=*(const int32_t *)(d+20);
+    return d[2]==7u || d[2]==8u || d[2]==9u || (d[2]==1u && hi-lo>=24);
 }
 /* Program Change: recall in the main loop, after any bank load in progress. */
 static void sc_request(unsigned program) {
@@ -1036,6 +1066,24 @@ static void sc_main(int busy) {
     }
     if(!b->recall)return;
     unsigned k=b->recall-1u,done=0;
+    if(b->fade_ms){
+        uint32_t t=PC_UI_NOW-b->fade_at;
+        if(t<b->fade_ms){
+            /* One pass: up to SC_BATCH moves, round robin over the scene. */
+            float a=(float)t/(float)b->fade_ms;
+            for(unsigned seen=0;seen<b->n && done<SC_BATCH;seen++){
+                unsigned j=b->cursor;b->cursor=j+1u<b->n ? j+1u : 0u;
+                uint16_t cell=b->item[j].cell;
+                unsigned id=b->item[j].id;
+                if(!sc_glides(id))continue;
+                int from=b->from[j],to=b->value[k][j];
+                int v=from+(int)((float)(to-from)*a);
+                if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
+            }
+            return;
+        }
+        b->fade_ms=0;b->cursor=0; /* the end: every value to the scene */
+    }
     while(b->cursor<b->n && done<SC_BATCH){
         unsigned j=b->cursor++;
         uint16_t cell=b->item[j].cell;

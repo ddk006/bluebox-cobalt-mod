@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Scene crossfade:** a **Fade** row on the scene page (Off, 0.1 s to 16 s,
+  saved in `settings.tml`, tag of the former Bank Ch setting). A recall
+  (Load Scene or Program Change) glides dB, 0–1000, pan and wide numeric
+  values such as BPM from their current values; switches, modes and lists
+  change when the fade ends. At most 24 changes per main-loop pass, as before.
+- **Eurorack port** (branch `euro`): `tools/retarget.py euro BLUEEURO.BIN`
+  builds Cobalt for the bluebox eurorack 1.5.1 (address map, RAM and object
+  offsets with evidence in `targets/`).
+
 ## v1.2.0
 
 Phones AUTO cue, for bluebox desktop firmware 1.5.2. Contributed by

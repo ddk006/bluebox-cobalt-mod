@@ -37,7 +37,7 @@ check(all(r==(TAG0+i,1) for i,r in enumerate(recs)),'128 PC slot records registe
 check([string(u,u32(u,0xc0010000+(TAG0+i)*28+24)) for i in (0,5,127)]==[b'pcmap0',b'pcmap5',b'pcmap127'],'slot keys pcmap0/pcmap5/pcmap127')
 check(string(u,call(u,0x8136134,TAG0))==b'pcmap0' and string(u,call(u,0x8136134,0x28a))==b'pcmap127','tag->name resolves the first and last slot')
 check(string(u,call(u,0x8136134,0x28b))==b'bankcc' and struct.unpack('<H',new[0x28b*28:0x28b*28+2])[0]==0x28b,'Bank CC setting registered at 0x28b (bankcc)')
-keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'bankch',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc'}
+keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'scenefade',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc'}
 check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI tags registered at 0x28b..0x294')
 check(call(u,0x8136134,0x295)==0,'tag->name still refuses ids past the table')
 u.mem_write(0x24010000,b'bankcc\0');check(call(u,0x8136164,0x24010000)==0x28b,'name->tag finds bankcc')
@@ -201,7 +201,7 @@ call(u,0x8120264,SETTINGS,0x28f,1)
 check(main(0x1402,dt=500)[0]==0 and main(dt=400)[0]==0,'PC Ch = None: every Bank Select ignored')
 call(u,0x8120264,SETTINGS,0x28f,0)
 call(u,0x8120264,SETTINGS,0x290,1)
-check(main(0x1402,dt=500)[0]==0 and main(dt=400)==(1,0x18,2,0),'old Bank Ch setting (None) no longer filters')
+check(main(0x1402,dt=500)[0]==0 and main(dt=400)==(1,0x18,2,0),'the scene fade (the old Bank Ch tag) does not filter Bank Select')
 complete();call(u,0x8120264,SETTINGS,0x290,0)
 # Bank Select for the project already loaded: ignored (no reload, no delay).
 curname[0]='My Song'
@@ -450,7 +450,7 @@ def page_rows(cell):
  del rowsl[:];u.mem_write(0x24011800,struct.pack('<H',cell));w32(u,LIST,99);r=call(u,PC['pc_page_rows'],SESSION,0x24011800,LIST);return r,u32(u,LIST),list(rowsl)
 w32(u,field(0),2);w32(u,field(1),3);w32(u,field(2),6)
 del button[:]
-check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6)]),'scene page rows: Scene 2, Save to 3, Bank # 6')
+check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x290,0)]),'scene page rows: Scene 2, Save to 3, Bank # 6, Fade Off')
 check(button==[('label','Select'),('rect',(226,182,93,38))] and u32(u,EDIT+0x888+0x14)==0x2a0,'scene page: bottom button labelled "Select" at the right (id 0x2a0)')
 call(u,0x8120264,SETTINGS,0x28b,1);call(u,0x8120264,SETTINGS,0x28f,3)
 check(page_rows(0x1b)[2]==[(0x28b,1),(0x28f,3),(0x117,1),(0x292,0),(0x293,1),(0x294,0)],'MIDI page rows: Bank CC, PC Ch, MIDIStopRcv (stock default on), MIDI Out, Map CC Sync (USB), Clock Src')
@@ -467,6 +467,8 @@ edit(0x17,0x28c,5);edit(0x17,0x28d,40);edit(0x17,0x28e,-3)
 check([u32(u,field(i)) for i in range(3)]==[5,16,0] and knobs==[],'scene page edits only change the selections (clamped 1-16 / 0-128), nothing reaches the engine')
 edit(0x1b,0x28f,4)
 check(knobs==[(0x18,0x28f,4)] and saves,'MIDI page edits go to the settings (cell 0x18) and save settings.tml')
+del knobs[:];del saves[:];edit(0x17,0x290,3)
+check(knobs==[(0x18,0x290,3)] and saves,'scene page Fade row: a setting (cell 0x18), saved in settings.tml')
 del knobs[:];edit(3,0x4,-100)
 check(knobs==[(3,0x4,(-100)&0xffffffff)],'other edits pass through to the knob path')
 toolsev=[];stub(u,0x8131210,lambda u:(toolsev.append(1),u.reg_write(UC_ARM_REG_R0,5)))
@@ -640,5 +642,28 @@ check(scroll(5000)==([],0),'a name that fits never scrolls')
 w32(u,BROWSER+0x614,1);scroll(10);scroll(1600);page(8)
 check(scroll(10)==([(MID,LONG)],1),'leaving the list puts the start back')
 check(scroll(5000)==([],0),'and nothing more off the list')
+
+# Crossfade: with Fade set, a recall glides the continuous values (dB, 0..1000,
+# wide numbers) from where they are; switches, modes and lists change at the end.
+fade_knob=stub(u,0x8124b44,knobpath)
+def run_until_idle():
+ for _ in range(100):
+  if not mainpass(dt=0):break
+call(u,0x8120264,SETTINGS,0x290,0)
+tset(u,0,0x4,-6000);tset(u,0,0x63,-500);tset(u,0x16,0x85,120);tset(u,0x14,0x1a0,0);save(15)
+tset(u,0,0x4,-1000);tset(u,0,0x63,500);tset(u,0x16,0x85,90);tset(u,0x14,0x1a0,2);save(16)
+act(0,15);run_until_idle()
+check(current(u)==15 and tget(u,0,0x4)==(-6000)&0xffffffff and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'fade Off: scene 15 at once (as before)')
+call(u,0x8120264,SETTINGS,0x290,4)  # 1 s
+act(0,16);mainpass(dt=500);run_until_idle()
+sv=lambda a:struct.unpack('<i',struct.pack('<I',a))[0]
+lvl=sv(tget(u,0,0x4));pan=sv(tget(u,0,0x63));bpm=tget(u,0x16,0x85)
+print('INFO halfway level',lvl,'pan',pan,'BPM',bpm)
+check(abs(lvl-(-3500))<=30,'fade 1 s, after 0.5 s: track 1 level halfway (-6.0 -> -1.0 dB: %d)'%lvl)
+check(abs(pan)<=20 and abs(bpm-105)<=2,'pan and BPM glide too (pan %d, BPM %d)'%(pan,bpm))
+check(tget(u,0x14,0x1a0)==0 and current(u)==15,'the FX1 mode (a list) waits for the end; the recall is not done yet')
+mainpass(dt=600);run_until_idle()
+check(current(u)==16 and tget(u,0,0x4)==(-1000)&0xffffffff and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90 and tget(u,0x14,0x1a0)==2,'after 1 s every value is exactly scene 16')
+call(u,0x8120264,SETTINGS,0x290,0);u.hook_del(fade_knob)
 
 print(H.checks,'scenes checks passed')
