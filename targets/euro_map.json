@@ -1089,6 +1089,11 @@
   "method": "code 11/12 insns, 0/6 before",
   "target": "0x08125b59"
  },
+ "0x08125d45": {
+  "delta": 4424,
+  "method": "manual: model event handler: push {r4,lr}; sub sp,#0x10; ldrh r2,[r1,#8]; strh r2,[sp,#0xa]; ldrh r3,[r1]; cmp r3,#0xd2; bhi; cmp r3,#0xbf as on the desktop, the euro adds mov r4,r0 after sub sp; only such function in the euro 0x0812xxxx code",
+  "target": "0x08126e8d"
+ },
  "0x08125e2a": {
   "delta": 4472,
   "method": "code 11/12 insns, 6/6 before",

@@ -49,7 +49,23 @@
   "FX2 Shoegaze title",
   "FX2 Shoegaze defaults",
   "Density drawing fraction",
-  "shared encoder acceleration ceiling 2x"
+  "shared encoder acceleration ceiling 2x",
+  "Gate input meter",
+  "Gate knob Off formatting",
+  "MIXER Gate fader",
+  "MIXER Gate label",
+  "MIXER construct sixth Gate button",
+  "MIXER ignore Main gate edits",
+  "MIXER sends Gate selector",
+  "MIXER sends selection",
+  "MIXER seventh button range",
+  "MIXER shared Gate edit commit",
+  "TRACK Gate fine encoder",
+  "TRACK shared Gate edit commit",
+  "Track Gate knob binding",
+  "channel EQ gate process pointer",
+  "channel defaults append gate",
+  "gate EQ owner constructor"
  ],
  "replace": {
   "tools/make_release.py": [
@@ -142,11 +158,37 @@
     "why": "the euro build labels itself Cblt 1.2e (src/delay_m4.h)"
    }
   ],
-  "tests/test_shoegaze_layout.py": [
+  "tests/firmware_harness.py": [
    {
-    "old": " stub(u,0x8102f4c,alloc);call(u,0x8135e34,0)\n",
-    "new": " stub(u,0x8102f4c,alloc);call(u,0x8135e34,0)\n w32(u,APP+0x5f20,0x24007800)  # euro: empty CV-assignment list (6 x 0x14 bytes) read by the knob info 0x08124958\n",
-    "why": "the euro knob info (0x08124958, desktop 0x08123d00) also looks the control up in a list at session+0x5f20 (0x08121390); the fixture session needs that list, empty as after a fresh start"
+    "old": " u.mem_write(0x8040000,image);",
+    "new": " u.mem_write(0x8040000,image);u.mem_write(0x30018010+0x5f20,struct.pack('<I',0x2407fc00));",
+    "why": "euro: the session holds a list at +0x5f20 (6 x 0x14 bytes, CV assignments) that the euro knob info 0x08124958 (desktop 0x08123d00) searches via 0x08121390; fixtures get it empty (at 0x2407fc00, above the test stack), as after a fresh start"
+   }
+  ],
+  "src/gate_m4.h": [
+   {
+    "old": "(t[3]=='2' || t[3]=='3') && !t[4])",
+    "new": "(t[3]=='3' || t[3]=='4') && !t[4])",
+    "why": "the euro names its outputs OUT3/OUT4 (desktop OUT2/OUT3); with seven send buttons both are shortened to fit 45 px"
+   },
+   {
+    "old": "(b,t[3]=='2' ? \"O 2\" : \"O 3\");",
+    "new": "(b,t[3]=='3' ? \"O 3\" : \"O 4\");",
+    "why": "the euro names its outputs OUT3/OUT4 (desktop OUT2/OUT3); with seven send buttons both are shortened to fit 45 px"
+   }
+  ],
+  "tests/test_gate_ui_096.py": [
+   {
+    "old": "[b'Pan',b'FX1',b'FX2',b'CUE',b'O 2',b'O 3']",
+    "new": "[b'Pan',b'FX1',b'FX2',b'CUE',b'O 3',b'O 4']",
+    "count": 1,
+    "why": "the euro names its outputs OUT3/OUT4 (desktop OUT2/OUT3); with seven send buttons both are shortened to fit 45 px"
+   },
+   {
+    "old": "cs(P+0xc304+0x65)==b'OUT2'",
+    "new": "cs(P+0xc304+0x65)==b'3&4'",
+    "count": 1,
+    "why": "euro: with 3&4 Mode on the fifth send button reads 3&4 (desktop OUT2)"
    }
   ]
  },
