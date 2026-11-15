@@ -11,7 +11,7 @@ the target image:
 Manual entries in targets/<target>_manual.json win; each carries the evidence. Unresolved addresses are listed and
 the retarget step refuses to build while any remains. Writes targets/<target>_map.json.
 """
-import bisect, json, pathlib, re, struct, sys
+import io, tokenize, bisect, json, pathlib, re, struct, sys
 
 from capstone import CS_ARCH_ARM, CS_MODE_MCLASS, CS_MODE_THUMB, Cs
 
@@ -30,7 +30,14 @@ def code_text(f):
     text = f.read_text(errors='replace')
     if f.suffix in ('.c', '.h', '.ld', '.cjs'):
         return re.sub(r'/\*.*?\*/|//[^\n]*', ' ', text, flags=re.S)
-    return re.sub(r'#[^\n]*', ' ', text) if f.suffix == '.py' else text
+    if f.suffix != '.py':
+        return text
+    # Python: drop comment tokens only ('#' inside strings, e.g. a patch name, stays)
+    try:
+        toks = [t for t in tokenize.generate_tokens(io.StringIO(text).readline) if t.type != tokenize.COMMENT]
+        return tokenize.untokenize(toks)
+    except (tokenize.TokenError, SyntaxError, IndentationError):
+        return re.sub(r'#[^\n]*', ' ', text)
 
 
 def flash_refs(desk):

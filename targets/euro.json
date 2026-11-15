@@ -69,7 +69,36 @@
   "output node phones auto process pointer",
   "mixer node process pointer records the mixer",
   "Phones Src three choices",
-  "Phones Src CUE MAIN AUTO list"
+  "Phones Src CUE MAIN AUTO list",
+  "B on Tools (MIDI row) opens the MIDI page, B there goes back",
+  "First project (none on the card) clears the scenes",
+  "MIDI out: DIN thru input merger",
+  "MIDI out: USB converter passes channel messages",
+  "New project clears the scenes",
+  "PC map Load page after PC",
+  "PC map MIDI program change capture",
+  "PC map MIDI realtime timestamp",
+  "PC map Tools hides PC slots",
+  "PC map delete clears slot",
+  "PC map main-loop dispatch",
+  "PC map name lookup end",
+  "PC map name table bound",
+  "PC map name table size",
+  "PC map rename follows name",
+  "PC map settings capacity 68 to 144",
+  "PC map settings defaults",
+  "PROJ Save assigns the chosen Bank #",
+  "PROJ list marks the loaded project",
+  "Row list tap on the MIDI row opens the MIDI page",
+  "Scene page Select button",
+  "Scenes A button (scene page open / leave)",
+  "Scenes Bank Select capture",
+  "Scenes edit page edits",
+  "Scenes edit page rows",
+  "Scenes page cell on page",
+  "Scenes project reader",
+  "Scenes project writer",
+  "Tools MIDI row has no value"
  ],
  "replace": {
   "tools/make_release.py": [
@@ -194,6 +223,94 @@
     "count": 1,
     "why": "euro: with 3&4 Mode on the fifth send button reads 3&4 (desktop OUT2)"
    }
+  ],
+  "src/pc_m4.c": [
+   {
+    "old": "#define PC_BTN(k) (*(volatile uint8_t *)(0x30009d80u+24u*(k)+0x0eu))\n#define PC_BTN_PRESS(k) (*(volatile uint16_t *)(0x30009d80u+24u*(k)+0x08u))",
+    "new": "/* Eurorack: a 4 x 4 key matrix instead of GPIO buttons. Its code table at\n * 0x3001f7d8 (16 keys of 16 B: press code +0, release code +8, level +0xc,\n * 1 = up, 0 = held; checked in the simulation) holds A as press code 0x0c. */\n#define PC_KEY(k) ((volatile const uint32_t *)(0x3001f7d8u+16u*(k)))",
+    "why": "desktop buttons are GPIO lines debounced into 0x30009d80 (init 0x081047a0); the euro scans a key matrix (0x08138a84) into the code table 0x3001f7d8, A = press code 0x0c at row 0 / column 1, level +0xc (sim: 1 up, 0 while held)"
+   },
+   {
+    "old": "    uint32_t *abtn=sc_field(F_ABTN);\n    if(!*abtn){\n        for(unsigned k=0;k<13u;k++)if(PC_BTN_PRESS(k)==0x0cu){*abtn=k+1u;break;}\n        if(!*abtn)return 0;\n    }\n    unsigned ones=0;\n    for(unsigned k=0;k<8u;k++)ones+=PC_BTN(k)!=0;\n    unsigned idle=ones>=4u;\n    return (PC_BTN(*abtn-1u)!=0)!=idle;",
+    "new": "    uint32_t *abtn=sc_field(F_ABTN);\n    if(!*abtn){\n        for(unsigned k=0;k<16u;k++)if(PC_KEY(k)[0]==0x0cu){*abtn=k+1u;break;}\n        if(!*abtn)return 0;\n    }\n    return PC_KEY(*abtn-1u)[3]==0u;",
+    "why": "desktop buttons are GPIO lines debounced into 0x30009d80 (init 0x081047a0); the euro scans a key matrix (0x08138a84) into the code table 0x3001f7d8, A = press code 0x0c at row 0 / column 1, level +0xc (sim: 1 up, 0 while held)"
+   },
+   {
+    "old": "__asm volatile(\"mov r2,r6\\nb.w sc_write\\n\");",
+    "new": "__asm volatile(\"add r2,sp,#0x32c\\nb.w sc_write\\n\");",
+    "why": "euro project writer keeps the document on the caller stack at sp+0x32c (desktop: r6); the hook is a bl, sp is the caller's"
+   },
+   {
+    "old": "\"movw r1,#0xeb3c\\n\"\n    \"movt r1,#0x3001\\n\"",
+    "new": "\"movw r1,#0xff28\\n\"\n    \"movt r1,#0x3001\\n\"",
+    "why": "UI millisecond clock 0x3001eb3c -> 0x3001ff28 (RAM table), split across movw/movt"
+   },
+   {
+    "old": "static void pc_post_load(unsigned index) {\n    uint8_t *base=(uint8_t *)0x30000180u;\n    unsigned k=*(volatile uint32_t *)(base+0x1488)&0x3fu;\n    uint8_t *e=base+k*24u;\n    *(volatile uint16_t *)(e+0xe84)=0x18;\n    *(volatile uint16_t *)(e+0xe8c)=0;\n    *(volatile uint32_t *)(e+0xe90)=index;\n    *(volatile uint32_t *)(e+0xe94)=0;\n    *(volatile uint32_t *)(e+0xe98)=0;\n    ((void (*)(void *))0x08100b51u)(base+0x1488);\n}\n",
+    "new": "static void pc_post_load(unsigned index) {\n    uint8_t *base=(uint8_t *)0x30000180u;\n    unsigned k=*(volatile uint32_t *)(base+0x1dd0)&0x3fu;\n    uint8_t *e=base+k*24u;\n    *(volatile uint16_t *)(e+0x17cc)=0x18;\n    *(volatile uint16_t *)(e+0x17d4)=0;\n    *(volatile uint32_t *)(e+0x17d8)=index;\n    *(volatile uint32_t *)(e+0x17dc)=0;\n    *(volatile uint32_t *)(e+0x17e0)=0;\n    ((void (*)(void *))0x08100b51u)(base+0x1dd0);\n}\n",
+    "why": "front-panel event ring in the input object 0x30000180: the euro object is larger, the ring sits 0x948 further (producer desktop 0x081008d8: index +0x1488, entries +0xe84 + k*24; euro 0x08100900: index +0x1dd0, entries +0x17cc + k*24, same 64 x 24 B layout and field order)"
+   },
+   {
+    "old": "    if(page && *page && e->id==0xabu)e->sub=PC_CELL_SCENES;",
+    "new": "    if(page && *page && e->id==0xacu){e->id=0xabu;e->sub=PC_CELL_SCENES;}",
+    "why": "the euro opens the project settings (cell 0x16, B on PROJ) with UI event 0xac (0x08123432: movs r3,#0xac; desktop 0x081227e2: #0xab); every other post site keeps its id; the scene page itself is opened as the plain edit page (0xab, as the desktop and the euro MIDI page do), not the tabbed project-settings view"
+   }
+  ],
+  "tests/test_scenes.py": [
+   {
+    "old": "snew[:7]==sold and len(sold)==7",
+    "new": "snew[:6]==sold and len(sold)==6",
+    "count": 1,
+    "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
+   },
+   {
+    "old": "snew[7:]",
+    "new": "snew[6:]",
+    "count": 1,
+    "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
+   },
+   {
+    "old": "len(saved)==7+SLOTS+7",
+    "new": "len(saved)==6+SLOTS+7",
+    "count": 1,
+    "why": "the euro settings.tml has six stock tags"
+   },
+   {
+    "old": "RING+0x1488",
+    "new": "RING+0x1dd0",
+    "count": 2,
+    "why": "euro event ring in the input object: index +0x1dd0, entries +0x17cc (desktop +0x1488 / +0xe84)"
+   },
+   {
+    "old": "RING+0xe84",
+    "new": "RING+0x17cc",
+    "count": 1,
+    "why": "euro event ring in the input object: index +0x1dd0, entries +0x17cc (desktop +0x1488 / +0xe84)"
+   },
+   {
+    "old": "BT=0x30009d80\ncall(u,0x81047a0)\ncheck([struct.unpack('<H',u.mem_read(BT+24*k+8,2))[0] for k in range(13)]==[0xf9]*8+[0xf4,0xf6,0xf7,7,0x0c],'stock button table: track keys, REC, PLAY, STOP, B, A (entry 12)')\nfor k in range(13):u.mem_write(BT+24*k+0xe,b'\\x01')  # idle = high\n",
+    "new": "KT=0x3001f7d8  # euro key matrix code table (16 x 16 B), as read in the simulation: E1 = A (0x0c), level +0xc 1 = up\nfor k,code in enumerate([7,0x0c,0,0,0xf9,0xf9,0xf9,0xf6,0xf9,0xf9,0xf9,0xf7,0xf4,0xf9,0xf9,0]):u.mem_write(KT+16*k,struct.pack('<IIII',code,0,0,1))\n",
+    "why": "the euro has a key matrix (code table 0x3001f7d8) instead of the desktop GPIO button table 0x30009d80 (init 0x081047a0)"
+   },
+   {
+    "old": "def hold(level):u.mem_write(BT+24*12+0xe,bytes([0 if level else 1]))",
+    "new": "def hold(level):w32(u,KT+16*1+0xc,0 if level else 1)",
+    "why": "the euro has a key matrix (code table 0x3001f7d8) instead of the desktop GPIO button table 0x30009d80 (init 0x081047a0)"
+   },
+   {
+    "old": "u.mem_write(0x24011000,struct.pack('<HHIHHIII',0xab,0,0x814b0f0,0x16,0,0,0,0))",
+    "new": "u.mem_write(0x24011000,struct.pack('<HHIHHIII',0xac,0,0x814b0f0,0x16,0,0,0,0))",
+    "count": 2,
+    "why": "the euro posts the project settings (cell 0x16) as UI event 0xac; the scene page turns it into 0xab for cell 0x17"
+   }
+  ],
+  "tests/test_accent.py": [
+   {
+    "old": "offsets=[0x10d240,0x10d2b0]",
+    "new": "offsets=[0x10fd40,0x10fdb0]",
+    "count": 1,
+    "why": "palette slots 4 and 32 in the .data image: desktop 0x0814d230, euro 0x0814fd30"
+   }
   ]
  },
  "ram": {
@@ -272,6 +389,22 @@
   "0x30001d80": {
    "target": "0x300027c0",
    "evidence": "display object (stock present/flip): exact literal at 23 mapped sites (e.g. desktop 0x081012de -> euro 0x08101316), +0xa40 like the MIDI port"
+  },
+  "0x30000098": {
+   "target": "0x30000098",
+   "evidence": "USBH MIDI class struct, .data copy: desktop flash 0x0814d2c8 = .data(0x0814d230)+0x98, euro 0x0814fdc8 = .data(0x0814fd30)+0x98 with the same layout (\"MIDI\", 1, five handlers, 0, 1)"
+  },
+  "0x300000b4": {
+   "target": "0x300000b4",
+   "evidence": "pData of the same USBH MIDI class struct (+0x1c)"
+  },
+  "0x3001734c": {
+   "target": "0x30017f8c",
+   "evidence": "LoadBank pending-load name: between the project list 0x300172fc (euro 0x30017f3c) and the session 0x300173d0 (euro 0x30018010), both +0xc40 with the same 0xd4 gap; 8 window votes for +0xc40"
+  },
+  "0x3001d2c8": {
+   "target": "0x3001ff08",
+   "evidence": "project MIDI map = session+0x5ef8: the session-table init uses add r5,r8,#0x5e80; adds #0x78 on both (desktop 0x08122ebc, euro 0x08123b10, same 0xee8/0xef8 tables)"
   }
  },
  "offsets": [
@@ -304,6 +437,42 @@
    "new": "0x743b",
    "count": 7,
    "why": "session recording; session fields above +0x7020 sit 0x38 further on the euro, from +0x73d4 0x64 further (scratch fieldmap over every base+0x7000 access of the mapped stock code: 0x7398->0x73d0 13x, 0x739a->0x73d2 7x, 0x739f->0x73d7 7x, 0x73d6->0x743a, 0x73d7->0x743b 2x)"
+  },
+  {
+   "old": "0x150cb0",
+   "new": "0x1f5a08",
+   "count": 4,
+   "why": "app object size: the allocation literal after the app setup (desktop 0x0810d568 = 0x150cb0, euro 0x0810d728 = 0x1f5a08)"
+  },
+  {
+   "old": "0x28d60",
+   "new": "0xcdab8",
+   "count": 3,
+   "why": "PROJ browser page in the app: desktop add #0x28d60 before bl 0x0813e994, euro add #0xcdab8 before bl 0x0814132c (mapped constructor)"
+  },
+  {
+   "old": "0x119a88",
+   "new": "0x1be7e0",
+   "count": 6,
+   "why": "Tools page in the app: desktop ldr r0,=0x119a88 before bl 0x0813140c, euro add #0x1be000 + #0x7e0 before bl 0x081324cc (mapped constructor)"
   }
- ]
+ ],
+ "not_applicable": {
+  "tests/test_adjustments_093.py": "compares with an older desktop release (patcher in tests/references)",
+  "tests/test_delay_types.py": "compares with the desktop v0.9.5 release",
+  "tests/test_exp4_performance.py": "compares with a desktop experiment build",
+  "tests/test_exp5_skip.py": "compares with a desktop experiment build",
+  "tests/test_exp6_gate_granular.py": "compares with a desktop experiment build",
+  "tests/test_exp7_gate_granular.py": "compares with a desktop experiment build",
+  "tests/test_exp8_controls.py": "compares with a desktop experiment build",
+  "tests/test_gate_delta_097.py": "compares with the desktop v0.9.7 release",
+  "tests/test_granular.py": "compares with the desktop v0.9.5 release (its own checks before that pass)",
+  "tests/test_improvements_091.py": "compares with an older desktop release",
+  "tests/test_refinements_092.py": "compares with an older desktop release (89 checks pass before)",
+  "tests/test_stereo_095.py": "compares with an older desktop release",
+  "tests/test_wild_094.py": "compares with an older desktop release",
+  "tests/test_packed_pcm24.py": "reconstructs the desktop C12 experiment; the PCM24 paths are covered by test_pcm24_fast and test_playback_pcm24",
+  "tests/test_tape_performance.py": "compares with the desktop experiment1 reference",
+  "tests/test_recording_diag.py": "its fixture stubs the desktop header status source; the euro header gets the storage text elsewhere (checked on screen in the simulation: 252MB intact next to the narrowed clock)"
+ }
 }

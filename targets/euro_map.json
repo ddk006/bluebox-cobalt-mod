@@ -434,6 +434,16 @@
   "method": "code 12/12 insns, 6/6 before",
   "target": "0x081004d4"
  },
+ "0x08100730": {
+  "delta": 56,
+  "method": "manual: front-panel input scan called once per main-loop pass (desktop bl at 0x081269d8, euro bl at 0x08127b48 after the same ldrb [r5]; cmp #0xd / #0x2c loop); one argument, the euro body is larger (more inputs); pc_main only forwards it",
+  "target": "0x08100768"
+ },
+ "0x08100731": {
+  "delta": 56,
+  "method": "manual: front-panel input scan called once per main-loop pass (desktop bl at 0x081269d8, euro bl at 0x08127b48 after the same ldrb [r5]; cmp #0xd / #0x2c loop); one argument, the euro body is larger (more inputs); pc_main only forwards it",
+  "target": "0x08100769"
+ },
  "0x08100b19": {
   "delta": 56,
   "method": "code 12/12 insns, 6/6 before",
@@ -954,6 +964,16 @@
   "method": "code 12/12 insns, 4/6 before",
   "target": "0x0812153d"
  },
+ "0x0812109e": {
+  "delta": 2356,
+  "method": "manual: project writer: InsertEndChild(session, <cvmap>) - on the euro the cvmap is inserted here (ldr r1,=\"cvmap\"; add r0,sp,#0x32c; bl X_NEW; mov r1,r0; mov r0,r5; bl X_INSERT) and filled afterwards; the document is sp+0x32c (euro sc_write_hook reads it there)",
+  "target": "0x081219d2"
+ },
+ "0x08121416": {
+  "delta": 3320,
+  "method": "manual: project reader: after bl load (0x08139100 = desktop 0x08137be8) and cbnz r0, the document at sp+0x110 (desktop sp+0x144) is freed by bl 0x08107b40 (= desktop 0x081079c0)",
+  "target": "0x0812210e"
+ },
  "0x08121b50": {
   "delta": 2608,
   "method": "site 4+2",
@@ -1003,6 +1023,16 @@
   "delta": 3152,
   "method": "code 11/12 insns, 5/6 before",
   "target": "0x081230b9"
+ },
+ "0x081224d4": {
+  "delta": 3152,
+  "method": "manual: project save: push {r4,lr}; mov r4,r0; movs r2,#1; addw r1,r0,#0xc08; ldr r0,[pc]; bl; add.w r4,r4,#0x7000 as on the desktop; called from the PROJ Save site 0x08140e40 (= desktop 0x0813e4a8)",
+  "target": "0x08123124"
+ },
+ "0x081224d5": {
+  "delta": 3152,
+  "method": "manual: project save: push {r4,lr}; mov r4,r0; movs r2,#1; addw r1,r0,#0xc08; ldr r0,[pc]; bl; add.w r4,r4,#0x7000 as on the desktop; called from the PROJ Save site 0x08140e40 (= desktop 0x0813e4a8)",
+  "target": "0x08123125"
  },
  "0x08122508": {
   "delta": 3152,
@@ -1089,15 +1119,30 @@
   "method": "code 11/12 insns, 0/6 before",
   "target": "0x08125b59"
  },
+ "0x08125cfc": {
+  "delta": 4376,
+  "method": "manual: first project: mov r0,r4; bl 0x0812671c (= desktop 0x08125630); ldr r1,[pc]; mov r0,r4; bl 0x08123a90 (= desktop 0x08122e3c, clear) as on the desktop with r5",
+  "target": "0x08126e14"
+ },
  "0x08125d45": {
   "delta": 4424,
   "method": "manual: model event handler: push {r4,lr}; sub sp,#0x10; ldrh r2,[r1,#8]; strh r2,[sp,#0xa]; ldrh r3,[r1]; cmp r3,#0xd2; bhi; cmp r3,#0xbf as on the desktop, the euro adds mov r4,r0 after sub sp; only such function in the euro 0x0812xxxx code",
   "target": "0x08126e8d"
  },
+ "0x08125e04": {
+  "delta": 4442,
+  "method": "manual: edit-page knob: ldr r3,[r1,#0x14]; str r3,[sp]; ldr r3,[r1,#0x10]; ldr r2,[r1,#0xc]; add.w r1,sp,#0xa; bl 0x08125b58 (= desktop 0x08124b44), the only caller",
+  "target": "0x08126f5e"
+ },
  "0x08125e2a": {
   "delta": 4472,
   "method": "code 11/12 insns, 6/6 before",
   "target": "0x08126fa2"
+ },
+ "0x081269d8": {
+  "delta": 4464,
+  "method": "manual: main-loop call of the input scan: same preceding loop (ldrb r3,[r5]; cmp r3,#0xd; beq; cmp r3,#0x2c; bne; b; mov r1,r5; mov r0,r4; bl; b; ldr r0,[pc]) found at 0x08127b30",
+  "target": "0x08127b48"
  },
  "0x08126fc0": {
   "delta": 4180,
@@ -1994,6 +2039,11 @@
   "method": "code 12/12 insns, 3/6 before",
   "target": "0x08140d28"
  },
+ "0x0813e4a8": {
+  "delta": 10648,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08140e40"
+ },
  "0x0813e5c0": {
   "delta": 10648,
   "method": "code 11/12 insns, 6/6 before",
@@ -2138,6 +2188,11 @@
   "delta": 10876,
   "method": "table 8 ptrs",
   "target": "0x0814f0a8"
+ },
+ "0x0814ca10": {
+  "delta": 11008,
+  "method": "manual: edit-page vtable: loaded by the edit-page constructor (desktop 0x0813d070 loads 0x0814ca10, euro 0x0813fa08 loads 0x0814f510); slot 12 holds the mapped select handler 0x0813f951 (= desktop 0x0813cfb9)",
+  "target": "0x0814f510"
  },
  "0x0814ca40": {
   "delta": 11008,

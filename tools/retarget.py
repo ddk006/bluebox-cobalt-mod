@@ -111,6 +111,18 @@ def main():
             text = text.replace(e['old'], e['new'])
         p.write_text(text)
 
+    # Literals a target replacement removed are no longer open.
+    def still(opens):
+        out = {}
+        for k, v in opens.items():
+            code = code_text(out_dir / k)
+            left = {a for a in v if re.search(r'0x0*%x(?![0-9a-fA-F])' % a, code, re.I)}
+            if left:
+                out[k] = left
+        return out
+    out_dir = out
+    unmapped, ram_open = still(unmapped), still(ram_open)
+
     # Every file that is compiled or patched must be fully mapped; tests may still use desktop addresses.
     built = {k: v for k, v in unmapped.items() if not k.startswith('tests/')}
     if built and '--allow-unmapped' not in sys.argv:
