@@ -15,7 +15,18 @@
   "theme palette slot",
   "knob extended conversion CLUT",
   "knob outline color",
-  "knob pointer color"
+  "knob pointer color",
+  "audio profiler exit call",
+  "clock label width",
+  "compressor process pointer",
+  "settings redraw check call",
+  "parameter definitions final call",
+  "master defaults final add",
+  "master settings saturation row",
+  "Cue icons and Scenes feedback before Cobalt flip",
+  "record PCM24 conversion",
+  "playback PCM24 conversion",
+  "in-place bank2 PCM24 burst"
  ],
  "replace": {
   "tools/make_release.py": [
@@ -69,5 +80,91 @@
     "why": "the Tools page shows the eurorack build"
    }
   ]
- }
+ },
+ "ram": {
+  "0x20000000": {
+   "target": "0x20000000",
+   "evidence": "DTCM start; same STM32H7 memory map: region bound"
+  },
+  "0x2001fc30": {
+   "target": "0x2001fc30",
+   "evidence": "DTCM range bound of the gate diagnostics; same STM32H7 memory map: region bound"
+  },
+  "0x24000000": {
+   "target": "0x24000000",
+   "evidence": "M7 heap limit word: the mapped M7 code loads the same literal (6 sites, e.g. desktop 0x0804044e = euro 0x0804044e)"
+  },
+  "0x24000004": {
+   "target": "0x24000004",
+   "evidence": "M7 heap cursor word: same literal at the mapped sites (3, e.g. desktop 0x080412f0 -> euro 0x0804141c)"
+  },
+  "0x24080000": {
+   "target": "0x24080000",
+   "evidence": "AXI SRAM end; same STM32H7 memory map: region bound"
+  },
+  "0x30000000": {
+   "target": "0x30000000",
+   "evidence": "D2 SRAM start (palette .data copied there at start-up on both: themes work on the euro); same STM32H7 memory map: region bound"
+  },
+  "0x30048000": {
+   "target": "0x30048000",
+   "evidence": "D2 SRAM end; same STM32H7 memory map: region bound"
+  },
+  "0x30000180": {
+   "target": "0x30000180",
+   "evidence": "front-panel event ring: same literal at the mapped sites (3, e.g. desktop 0x081006ca -> euro 0x081006d2)"
+  },
+  "0x30002c50": {
+   "target": "0x30003690",
+   "evidence": "MIDI out port: exact literal at 9 mapped sites (e.g. desktop 0x08103356 -> euro 0x0810317a), +0xa40 like its neighbours"
+  },
+  "0x30009fe8": {
+   "target": "0x3000ac28",
+   "evidence": "USB host handle: exact literal at the mapped site desktop 0x0810551e -> euro 0x081056b6, +0xc40 as the surrounding data"
+  },
+  "0x3000a854": {
+   "target": "0x3000b494",
+   "evidence": "USBH MIDI class handle: exact literal at the mapped site desktop 0x08105832 -> euro 0x081059b2"
+  },
+  "0x3000a894": {
+   "target": "0x3000b4d4",
+   "evidence": "engine pointer: exact literal at 35 mapped sites (e.g. desktop 0x08103374 -> euro 0x08103198)"
+  },
+  "0x3000d9fc": {
+   "target": "0x3000e63c",
+   "evidence": "app pointer: exact literal in the main loop (desktop 0x0810d358 -> euro 0x0810d518) and 2 more; BlueLex euro uses 0x3000e63c as the app pointer"
+  },
+  "0x30016fd0": {
+   "target": "0x30017c10",
+   "evidence": "settings file object: exact literal at 34 mapped sites (e.g. desktop 0x0810a446 -> euro 0x0810a606)"
+  },
+  "0x300172fc": {
+   "target": "0x30017f3c",
+   "evidence": "project list: exact literal at 16 mapped sites (e.g. desktop 0x08122fe2 -> euro 0x08123c36)"
+  },
+  "0x300173d0": {
+   "target": "0x30018010",
+   "evidence": "session: exact literal at 139 mapped sites (e.g. desktop 0x08126f16 -> euro 0x08127f7a); the 12 instructions after each load use the same offsets on both (no immediate differs)"
+  },
+  "0x3001eb30": {
+   "target": "0x3001f7d0",
+   "evidence": "parameter definitions pointer: exact literal at 11 mapped sites (e.g. desktop 0x08134c12 -> euro 0x08135d8e)"
+  },
+  "0x3001eb3c": {
+   "target": "0x3001ff28",
+   "evidence": "UI millisecond clock: exact literal at 15 mapped sites (e.g. desktop 0x08127d6e -> euro 0x08128dba); moved apart from 0x3001eb30"
+  },
+  "0x30001d80": {
+   "target": "0x300027c0",
+   "evidence": "display object (stock present/flip): exact literal at 23 mapped sites (e.g. desktop 0x081012de -> euro 0x08101316), +0xa40 like the MIDI port"
+  }
+ },
+ "offsets": [
+  {
+   "old": "0x1e978",
+   "new": "0x1e9e8",
+   "count": 11,
+   "why": "the edit/settings page inside the app object: desktop app ctor add r0,r4,#0x1e978 before bl 0x0813d070, euro add r0,r4,#0x1e9e8 before bl 0x0813fa08 (0x08135b7e); BlueLex euro checks page == app+0x1e9e8, kind 0xc at +0xa3e0 (same +0xa3e0 accesses on both)"
+  }
+ ]
 }

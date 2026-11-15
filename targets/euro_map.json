@@ -385,9 +385,9 @@
   "target": "0x0805b1a8"
  },
  "0x0806a24c": {
-  "delta": 2652,
-  "method": "search 32+32",
-  "target": "0x0806aca8"
+  "delta": 2672,
+  "method": "manual: compressor vtable slot 3 (process): desktop vtable 0x0806a240 slot 3 holds 0x08042649, euro vtable 0x0806acb0 slot 3 holds 0x08042a91 (= the mapped compressor process; identical code, same object offsets); BlueLex euro patches the same word",
+  "target": "0x0806acbc"
  },
  "0x0806a2a8": {
   "delta": 2672,
@@ -1803,6 +1803,11 @@
   "delta": 5400,
   "method": "code 12/12 insns, 6/6 before",
   "target": "0x0813ab34"
+ },
+ "0x08139790": {
+  "delta": 5468,
+  "method": "manual: clock label width movs r3,#0x8c: BlueLex euro narrows the same instruction (8c23 -> 8623) for its CPU bar at x 314; same header layout (320x240, clock at the top right)",
+  "target": "0x0813acec"
  },
  "0x081397b8": {
   "delta": 5552,
