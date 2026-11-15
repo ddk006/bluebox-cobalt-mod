@@ -26,7 +26,30 @@
   "Cue icons and Scenes feedback before Cobalt flip",
   "record PCM24 conversion",
   "playback PCM24 conversion",
-  "in-place bank2 PCM24 burst"
+  "in-place bank2 PCM24 burst",
+  "delay graph constructor call",
+  "delay process pointer",
+  "reverb send process pointer",
+  "FX1 native input gate capture",
+  "delay line read",
+  "delay native parameter list",
+  "FX delay mode parameter list",
+  "delay encoder paging",
+  "FX compact panel 13 widgets",
+  "FX populate",
+  "FX native B selector action",
+  "FX shared selector list fill",
+  "FX1 selector row to saved mode",
+  "FX encoder input",
+  "FX timed value update",
+  "FX mode change event handler",
+  "FX layout wrapper",
+  "FX1 A group-cycle dispatch",
+  "FX1 active effect title",
+  "FX2 Shoegaze title",
+  "FX2 Shoegaze defaults",
+  "Density drawing fraction",
+  "shared encoder acceleration ceiling 2x"
  ],
  "replace": {
   "tools/make_release.py": [
@@ -71,6 +94,11 @@
     "old": "'2536f7c45a4a9ad8bd7d06474ce395ae1276e7a60b03a901892e823bdcb1a335'",
     "new": "'416fafbd18e6c96f395982c2e5ffecdf08d1fe8ff7f64515f1ac9a1938c1c1b3'",
     "why": "stock PCM24 recording converter at 0x08108fb0: same code as the desktop's 0x08108df4, its f2lz call goes to 0x08144624 instead of 0x08141c44"
+   },
+   {
+    "old": "bytes.fromhex('4ff4c87233212046fff708fd4ff4c87239212046fff702fd78220e212046fff7fdfc4ff47a72cb212046fff7f7fc012235212046fff7f2fc0122ca212046fff7edfc012236212046fff7e8fc002237212046fff7e3fc062234212046fff7defc31e6')",
+    "new": "bytes.fromhex('4ff4c87233212046fff70efd4ff4c87239212046fff708fd78220e212046fff703fd4ff47a72cb212046fff7fdfc012235212046fff7f8fc0122ca212046fff7f3fc012236212046fff7eefc002237212046fff7e9fc062234212046fff7e4fc37e6')",
+    "why": "FX1 delay defaults block 0x08120bba: same nine stock adds; only the final b to 0x0812088c (desktop 0x08120538) has another distance (the block moved +840, its target +852)"
    }
   ],
   "src/delay_m4.h": [
@@ -78,6 +106,47 @@
     "old": "\"Cblt 1.2\"",
     "new": "\"Cblt 1.2e\"",
     "why": "the Tools page shows the eurorack build"
+   }
+  ],
+  "tests/test_controls.py": [
+   {
+    "old": "b'1.5.2'",
+    "new": "b'1.5.1'",
+    "count": 2,
+    "why": "official firmware version shown on the Tools page"
+   },
+   {
+    "old": "b'Cblt 1.2'",
+    "new": "b'Cblt 1.2e'",
+    "count": 2,
+    "why": "the euro build labels itself Cblt 1.2e (src/delay_m4.h)"
+   },
+   {
+    "old": "b'1.5.2\\0'",
+    "new": "b'1.5.1\\0'",
+    "count": 1,
+    "why": "official version string"
+   }
+  ],
+  "tests/test_recording_diag.py": [
+   {
+    "old": "b'1.5.2'",
+    "new": "b'1.5.1'",
+    "count": 1,
+    "why": "official firmware version shown on the Tools page"
+   },
+   {
+    "old": "b'Cblt 1.2'",
+    "new": "b'Cblt 1.2e'",
+    "count": 1,
+    "why": "the euro build labels itself Cblt 1.2e (src/delay_m4.h)"
+   }
+  ],
+  "tests/test_shoegaze_layout.py": [
+   {
+    "old": " stub(u,0x8102f4c,alloc);call(u,0x8135e34,0)\n",
+    "new": " stub(u,0x8102f4c,alloc);call(u,0x8135e34,0)\n w32(u,APP+0x5f20,0x24007800)  # euro: empty CV-assignment list (6 x 0x14 bytes) read by the knob info 0x08124958\n",
+    "why": "the euro knob info (0x08124958, desktop 0x08123d00) also looks the control up in a list at session+0x5f20 (0x08121390); the fixture session needs that list, empty as after a fresh start"
    }
   ]
  },
@@ -165,6 +234,30 @@
    "new": "0x1e9e8",
    "count": 11,
    "why": "the edit/settings page inside the app object: desktop app ctor add r0,r4,#0x1e978 before bl 0x0813d070, euro add r0,r4,#0x1e9e8 before bl 0x0813fa08 (0x08135b7e); BlueLex euro checks page == app+0x1e9e8, kind 0xc at +0xa3e0 (same +0xa3e0 accesses on both)"
+  },
+  {
+   "old": "0x737c",
+   "new": "0x73b4",
+   "count": 3,
+   "why": "session settings table: the stock settings save passes add.w r2,rX,#0x7300; adds #0x7c on the desktop, add.w r2,rX,#0x7380; adds #0x34 on the euro (5 sites, e.g. 0x08123ac2); session fields above +0x7020 sit 0x38 further on the euro, from +0x73d4 0x64 further (scratch fieldmap over every base+0x7000 access of the mapped stock code: 0x7398->0x73d0 13x, 0x739a->0x73d2 7x, 0x739f->0x73d7 7x, 0x73d6->0x743a, 0x73d7->0x743b 2x)"
+  },
+  {
+   "old": "0x739a",
+   "new": "0x73d2",
+   "count": 11,
+   "why": "session current page, written by the page switch (desktop 0x08122508 / euro 0x08123158: ldrh [r6,#0x398] vs [r6,#0x3d0] after add #0x7000); session fields above +0x7020 sit 0x38 further on the euro, from +0x73d4 0x64 further (scratch fieldmap over every base+0x7000 access of the mapped stock code: 0x7398->0x73d0 13x, 0x739a->0x73d2 7x, 0x739f->0x73d7 7x, 0x73d6->0x743a, 0x73d7->0x743b 2x)"
+  },
+  {
+   "old": "0x73d6",
+   "new": "0x743a",
+   "count": 3,
+   "why": "session record requested; session fields above +0x7020 sit 0x38 further on the euro, from +0x73d4 0x64 further (scratch fieldmap over every base+0x7000 access of the mapped stock code: 0x7398->0x73d0 13x, 0x739a->0x73d2 7x, 0x739f->0x73d7 7x, 0x73d6->0x743a, 0x73d7->0x743b 2x)"
+  },
+  {
+   "old": "0x73d7",
+   "new": "0x743b",
+   "count": 7,
+   "why": "session recording; session fields above +0x7020 sit 0x38 further on the euro, from +0x73d4 0x64 further (scratch fieldmap over every base+0x7000 access of the mapped stock code: 0x7398->0x73d0 13x, 0x739a->0x73d2 7x, 0x739f->0x73d7 7x, 0x73d6->0x743a, 0x73d7->0x743b 2x)"
   }
  ]
 }

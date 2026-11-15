@@ -10,7 +10,7 @@ Copies src/, tools/, tests/, themes/ and build.sh to build/<target>/ and rewrite
   - the per-file text replacements in targets/<target>.json (hashes, file offsets), each one
     must match exactly as often as stated;
   - in tests/, image slices [A:B] whose start A is a file offset of a mapped address (B moves with A;
-    the nearest mapped address within 16 bytes gives the shift);
+    the nearest mapped address within 64 bytes gives the shift);
   - in tests/, checks that compare a sha256 with a desktop build or baseline are kept but reported as skipped
     (the euro build cannot reproduce desktop hashes; the behaviour checks around them still run);
 then runs build.sh there with the target's stock image. Only patches whose name starts with one of the target's
@@ -86,13 +86,12 @@ def main():
             p.write_text(lit.sub(e['new'], p.read_text()))
 
     # tests: desktop hash comparisons become a visible skip
-    hashcheck = re.compile(r"check\(hashlib\.sha256\((?:[^()]|\([^()]*(?:\([^()]*\))*[^()]*\))*\)\.hexdigest\(\)\s*==\s*[^,]+,"
-                           r"\s*('(?:[^'\\]|\\.)*')\)")
+    hashcheck = re.compile(r"^(\s*)check\(hashlib\.sha256\(.*\.hexdigest\(\)\s*==\s*[\w\[\]'.]+\s*,\s*(.*)\)\s*$", re.M)
     span = re.compile(r'\[(0x[0-9a-fA-F]{5,6}):(0x[0-9a-fA-F]{5,6})\]')
     def span_sub(m):
-        # the nearest mapped address within 16 bytes gives the shift (code and data move in blocks)
+        # the nearest mapped address within 64 bytes gives the shift (code and data move in blocks)
         a, b = int(m.group(1), 16), int(m.group(2), 16)
-        for k in sorted(range(-16, 17), key=abs):
+        for k in sorted(range(-64, 65), key=abs):
             if BASE + a + k in amap:
                 d = amap[BASE + a + k] - (BASE + a + k)
                 return '[%#x:%#x]' % (a + d, b + d)
@@ -100,7 +99,7 @@ def main():
     for p in sorted((out / 'tests').glob('test_*.py')):
         p.write_text(span.sub(span_sub, p.read_text()))
     for p in sorted((out / 'tests').glob('test_*.py')):
-        p.write_text(hashcheck.sub(lambda m: f"check(True,'SKIPPED on {target} (desktop hash): '+{m.group(1)})", p.read_text()))
+        p.write_text(hashcheck.sub(lambda m: f"{m.group(1)}check(True,'SKIPPED on {target} (desktop hash): '+{m.group(2)})", p.read_text()))
 
     for rel, edits in conf.get('replace', {}).items():
         p = out / rel
