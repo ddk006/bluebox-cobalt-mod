@@ -65,7 +65,11 @@
   "Track Gate knob binding",
   "channel EQ gate process pointer",
   "channel defaults append gate",
-  "gate EQ owner constructor"
+  "gate EQ owner constructor",
+  "output node phones auto process pointer",
+  "mixer node process pointer records the mixer",
+  "Phones Src three choices",
+  "Phones Src CUE MAIN AUTO list"
  ],
  "replace": {
   "tools/make_release.py": [
