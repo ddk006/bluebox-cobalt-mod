@@ -2,11 +2,16 @@
 
 ## Unreleased
 
-- **Scene crossfade:** a **Fade** row on the scene page (Off, 0.1 s to 16 s,
-  saved in `settings.tml`, tag of the former Bank Ch setting). A recall
-  (Load Scene or Program Change) glides dB, 0–1000, pan and wide numeric
-  values such as BPM from their current values; switches, modes and lists
-  change when the fade ends. At most 24 changes per main-loop pass, as before.
+- **Scene crossfade by MIDI CC:** a **Fade CC** row on the scene page (Off or
+  CC 1–119, saved in `settings.tml` as `fadecc`, tag of the former Bank Ch
+  setting; listens on the PC Ch channel). With it set, a recall (Load Scene or
+  Program Change) waits for that controller: dB, 0–1000, pan and wide numeric
+  values such as BPM follow the fader from their current values, switches,
+  modes and lists change when it reaches the far end. The far end is 127 when
+  the fader sat in the lower half at the recall and 0 from the upper half, so
+  it works back and forth like a DJ crossfader. At most 24 changes per
+  main-loop pass, as before. The Fade CC is taken before Bank Select, and the
+  stock CC mapping still sees it.
 - **Eurorack port** (branch `euro`): `tools/retarget.py euro BLUEEURO.BIN`
   builds Cobalt for the bluebox eurorack 1.5.1 (address map, RAM and object
   offsets with evidence in `targets/`).

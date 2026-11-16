@@ -281,10 +281,14 @@ that differ, without loading anything, so playback and recording carry on.
   - **Save Scene:** save the current state to that scene.
   - **Bank #:** give the project a number (None or 1–128) for MIDI Bank
     Select. A number another project has is refused ("BANK n IN USE").
-  - **Fade:** crossfade time for recalls (Off, 0.1 s to 16 s), saved in
-    `settings.tml`. Levels, knobs, pan and tempo glide from where they are to
-    the scene; switches, modes and lists change at the end of the fade. Applies
-    to Load Scene and to Program Change.
+  - **Fade CC:** crossfade by a MIDI controller (Off or CC 1–119, on the PC
+    Ch channel), saved in `settings.tml`. With it set, a recall (Load Scene
+    or Program Change) waits for the fader: levels, knobs, pan and tempo
+    follow it from where they are to the scene; switches, modes and lists
+    change when it reaches the far end. The far end is 127 if the fader was
+    in the lower half at the recall, 0 if it was in the upper half, so it
+    goes back and forth like a DJ crossfader. Until the fader moves nothing
+    changes, so with no controller set Fade CC to Off.
   Press A to leave. PROJ Save also applies the Bank # chosen there.
 - **Quick save:** hold A for 2 s on MAIN. A band at the top shows progress,
   then saves the next empty scene. A new project starts at scene 1.

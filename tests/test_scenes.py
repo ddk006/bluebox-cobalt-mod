@@ -37,7 +37,7 @@ check(all(r==(TAG0+i,1) for i,r in enumerate(recs)),'128 PC slot records registe
 check([string(u,u32(u,0xc0010000+(TAG0+i)*28+24)) for i in (0,5,127)]==[b'pcmap0',b'pcmap5',b'pcmap127'],'slot keys pcmap0/pcmap5/pcmap127')
 check(string(u,call(u,0x8136134,TAG0))==b'pcmap0' and string(u,call(u,0x8136134,0x28a))==b'pcmap127','tag->name resolves the first and last slot')
 check(string(u,call(u,0x8136134,0x28b))==b'bankcc' and struct.unpack('<H',new[0x28b*28:0x28b*28+2])[0]==0x28b,'Bank CC setting registered at 0x28b (bankcc)')
-keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'scenefade',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc'}
+keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'fadecc',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc'}
 check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI tags registered at 0x28b..0x294')
 check(call(u,0x8136134,0x295)==0,'tag->name still refuses ids past the table')
 u.mem_write(0x24010000,b'bankcc\0');check(call(u,0x8136164,0x24010000)==0x28b,'name->tag finds bankcc')
@@ -123,21 +123,26 @@ check(isr(0xd0,0x05)==(0x81033ba,0),'non-PC status takes the stock ignore path w
 # Bank Select stub at 0x08103378: CC 0 stores its value, everything else
 # resumes the stock dispatch with the original compare flags.
 TR=0x38800fa0
-def cc(status,d1,d2):
- u=machine();w32(u,TR+0x18,0);w32(u,TR+0x1c,0);u.mem_write(MSG,bytes([status,d1,d2,0,3]))
+def cc(status,d1,d2,fade_cc=0):
+ u=machine();w32(u,TR+0x18,0);w32(u,TR+0x1c,0);w32(u,0x38800fe8,0);w32(u,0x38800fec,fade_cc);u.mem_write(MSG,bytes([status,d1,d2,0,3]))
  u.reg_write(UC_ARM_REG_R4,MSG);u.reg_write(UC_ARM_REG_R0,status&0xf0 if status<0xf0 else status);u.reg_write(UC_ARM_REG_SP,0x2407f000)
  hit=[]
  def resume(u,a,n,_):
   if a in (0x8103386,0x810337c):hit.append(a);u.emu_stop()
  u.hook_add(UC_HOOK_CODE,resume,begin=0x8103370,end=0x8103390)
- u.emu_start(PC['pc_midi_cc']|1,0,count=20)
+ u.emu_start(PC['pc_midi_cc']|1,0,count=30)
  if not hit:raise AssertionError('CC stub did not resume stock code')
- cc.lsb=u32(u,TR+0x1c)
+ cc.lsb=u32(u,TR+0x1c);cc.fade=u32(u,0x38800fe8)
  return hit[0],u32(u,TR+0x18),(u.reg_read(UC_ARM_REG_CPSR)>>29)&3
 check(cc(0xb0,0,5)==(0x8103386,0x1005,3) and cc.lsb==0,'Bank Select MSB (CC 0 = 5) stored, stock CC forwarding resumes')
 check(cc(0xb0,32,9)==(0x8103386,0,3) and cc.lsb==0x1009,'Bank Select LSB (CC 32 = 9) stored separately')
 check(cc(0xb4,0,1)[1]==0x1401,'Bank Select keeps its channel (5)')
 check(cc(0xb0,7,100)[:2]==(0x8103386,0),'other controllers (CC 7) forwarded untouched')
+check(cc(0xb0,7,100)[:2]==(0x8103386,0) and cc.fade==0,'Fade CC Off: CC 7 not taken as the fader')
+check(cc(0xb2,7,100,fade_cc=7)==(0x8103386,0,3) and cc.fade==0x1264,'Fade CC 7: its value stored with the channel (3), stock CC forwarding resumes')
+check(cc(0xb0,7,0,fade_cc=7)[1]==0 and cc.fade==0x1000,'Fade CC value 0 still marked as received')
+check(cc(0xb0,0,5,fade_cc=7)[1]==0x1005 and cc.fade==0,'Fade CC 7: Bank Select MSB still stored, not the fader')
+check(cc(0xb0,32,9,fade_cc=32)[1]==0 and cc.fade==0x1009 and cc.lsb==0,'Fade CC 32: the fader wins over Bank Select LSB')
 r=cc(0x90,60,100);check(r[:2]==(0x810337c,0) and r[2]==0,'non-CC status resumes at the stock bhi with the compare flags (lower)')
 r=cc(0xe0,0,64);check(r[:2]==(0x810337c,0) and r[2]==1,'higher status resumes with carry set (stock bhi taken)')
 
@@ -201,7 +206,7 @@ call(u,0x8120264,SETTINGS,0x28f,1)
 check(main(0x1402,dt=500)[0]==0 and main(dt=400)[0]==0,'PC Ch = None: every Bank Select ignored')
 call(u,0x8120264,SETTINGS,0x28f,0)
 call(u,0x8120264,SETTINGS,0x290,1)
-check(main(0x1402,dt=500)[0]==0 and main(dt=400)==(1,0x18,2,0),'the scene fade (the old Bank Ch tag) does not filter Bank Select')
+check(main(0x1402,dt=500)[0]==0 and main(dt=400)==(1,0x18,2,0),'the scene Fade CC (the old Bank Ch tag) does not filter Bank Select')
 complete();call(u,0x8120264,SETTINGS,0x290,0)
 # Bank Select for the project already loaded: ignored (no reload, no delay).
 curname[0]='My Song'
@@ -450,7 +455,7 @@ def page_rows(cell):
  del rowsl[:];u.mem_write(0x24011800,struct.pack('<H',cell));w32(u,LIST,99);r=call(u,PC['pc_page_rows'],SESSION,0x24011800,LIST);return r,u32(u,LIST),list(rowsl)
 w32(u,field(0),2);w32(u,field(1),3);w32(u,field(2),6)
 del button[:]
-check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x290,0)]),'scene page rows: Scene 2, Save to 3, Bank # 6, Fade Off')
+check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x290,0)]),'scene page rows: Scene 2, Save to 3, Bank # 6, Fade CC Off')
 check(button==[('label','Select'),('rect',(226,182,93,38))] and u32(u,EDIT+0x888+0x14)==0x2a0,'scene page: bottom button labelled "Select" at the right (id 0x2a0)')
 call(u,0x8120264,SETTINGS,0x28b,1);call(u,0x8120264,SETTINGS,0x28f,3)
 check(page_rows(0x1b)[2]==[(0x28b,1),(0x28f,3),(0x117,1),(0x292,0),(0x293,1),(0x294,0)],'MIDI page rows: Bank CC, PC Ch, MIDIStopRcv (stock default on), MIDI Out, Map CC Sync (USB), Clock Src')
@@ -468,7 +473,7 @@ check([u32(u,field(i)) for i in range(3)]==[5,16,0] and knobs==[],'scene page ed
 edit(0x1b,0x28f,4)
 check(knobs==[(0x18,0x28f,4)] and saves,'MIDI page edits go to the settings (cell 0x18) and save settings.tml')
 del knobs[:];del saves[:];edit(0x17,0x290,3)
-check(knobs==[(0x18,0x290,3)] and saves,'scene page Fade row: a setting (cell 0x18), saved in settings.tml')
+check(knobs==[(0x18,0x290,3)] and saves,'scene page Fade CC row: a setting (cell 0x18), saved in settings.tml')
 del knobs[:];edit(3,0x4,-100)
 check(knobs==[(3,0x4,(-100)&0xffffffff)],'other edits pass through to the knob path')
 toolsev=[];stub(u,0x8131210,lambda u:(toolsev.append(1),u.reg_write(UC_ARM_REG_R0,5)))
@@ -643,27 +648,47 @@ w32(u,BROWSER+0x614,1);scroll(10);scroll(1600);page(8)
 check(scroll(10)==([(MID,LONG)],1),'leaving the list puts the start back')
 check(scroll(5000)==([],0),'and nothing more off the list')
 
-# Crossfade: with Fade set, a recall glides the continuous values (dB, 0..1000,
-# wide numbers) from where they are; switches, modes and lists change at the end.
+# Crossfade by the Fade CC: a recall waits for the fader; continuous values
+# (dB, 0..1000, wide numbers) follow it from where they are; switches, modes
+# and lists change at the far end (127 from the lower half, 0 from the upper).
 fade_knob=stub(u,0x8124b44,knobpath)
-def run_until_idle():
+def run_until_idle(fader=0):
+ w32(u,STATE+8,fader)
  for _ in range(100):
   if not mainpass(dt=0):break
+  w32(u,STATE+8,0)
+ w32(u,STATE+8,0)
+def fader(v,ch=0):run_until_idle(0x1000|ch<<8|v)
+sv=lambda a:struct.unpack('<i',struct.pack('<I',a))[0]
 call(u,0x8120264,SETTINGS,0x290,0)
 tset(u,0,0x4,-6000);tset(u,0,0x63,-500);tset(u,0x16,0x85,120);tset(u,0x14,0x1a0,0);save(15)
 tset(u,0,0x4,-1000);tset(u,0,0x63,500);tset(u,0x16,0x85,90);tset(u,0x14,0x1a0,2);save(16)
 act(0,15);run_until_idle()
-check(current(u)==15 and tget(u,0,0x4)==(-6000)&0xffffffff and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'fade Off: scene 15 at once (as before)')
-call(u,0x8120264,SETTINGS,0x290,4)  # 1 s
-act(0,16);mainpass(dt=500);run_until_idle()
-sv=lambda a:struct.unpack('<i',struct.pack('<I',a))[0]
-lvl=sv(tget(u,0,0x4));pan=sv(tget(u,0,0x63));bpm=tget(u,0x16,0x85)
-print('INFO halfway level',lvl,'pan',pan,'BPM',bpm)
-check(abs(lvl-(-3500))<=30,'fade 1 s, after 0.5 s: track 1 level halfway (-6.0 -> -1.0 dB: %d)'%lvl)
-check(abs(pan)<=20 and abs(bpm-105)<=2,'pan and BPM glide too (pan %d, BPM %d)'%(pan,bpm))
-check(tget(u,0x14,0x1a0)==0 and current(u)==15,'the FX1 mode (a list) waits for the end; the recall is not done yet')
-mainpass(dt=600);run_until_idle()
-check(current(u)==16 and tget(u,0,0x4)==(-1000)&0xffffffff and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90 and tget(u,0x14,0x1a0)==2,'after 1 s every value is exactly scene 16')
-call(u,0x8120264,SETTINGS,0x290,0);u.hook_del(fade_knob)
+check(current(u)==15 and tget(u,0,0x4)==(-6000)&0xffffffff and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'Fade CC Off: scene 15 at once (as before)')
+call(u,0x8120264,SETTINGS,0x290,7)  # Fade CC 7
+mainpass(dt=5);check(u32(u,STATE+12)==7,'the main loop hands the Fade CC number (7) to the IRQ')
+fader(0);act(0,16);run_until_idle();run_until_idle()
+check(sv(tget(u,0,0x4))==-6000 and current(u)==15,'Fade CC set: the recall waits for the fader (nothing moves at 0)')
+fader(127//2+1);lvl=sv(tget(u,0,0x4));pan=sv(tget(u,0,0x63));bpm=tget(u,0x16,0x85)
+print('INFO fader 64: level',lvl,'pan',pan,'BPM',bpm)
+check(abs(lvl-(-3500))<=60,'fader at the middle: track 1 level halfway (-6.0 -> -1.0 dB: %d)'%lvl)
+check(abs(pan)<=20 and abs(bpm-105)<=2,'pan and BPM follow too (pan %d, BPM %d)'%(pan,bpm))
+check(tget(u,0x14,0x1a0)==0 and current(u)==15,'the FX1 mode (a list) waits for the far end; the recall is not done yet')
+fader(32);check(abs(sv(tget(u,0,0x4))-(-4740))<=60,'moving back moves the values back (%d)'%sv(tget(u,0,0x4)))
+fader(40,ch=3);check(abs(sv(tget(u,0,0x4))-(-4425))<=60,'PC Ch All: any channel is taken (%d)'%sv(tget(u,0,0x4)))
+call(u,0x8120264,SETTINGS,0x28f,1+5)
+fader(100,ch=3);check(abs(sv(tget(u,0,0x4))-(-4425))<=60,'PC Ch 5: the fader on channel 4 is ignored')
+call(u,0x8120264,SETTINGS,0x28f,0)
+fader(127)
+check(current(u)==16 and tget(u,0,0x4)==(-1000)&0xffffffff and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90 and tget(u,0x14,0x1a0)==2,'fader at 127: every value is exactly scene 16')
+act(0,15);run_until_idle()
+check(current(u)==16 and sv(tget(u,0,0x4))==-1000,'next recall from the top: waits again')
+fader(64)
+check(abs(sv(tget(u,0,0x4))-(-3480))<=60,'from 127 it runs towards 0 (fader 64: about halfway, %d)'%sv(tget(u,0,0x4)))
+fader(0)
+check(current(u)==15 and sv(tget(u,0,0x4))==-6000 and tget(u,0x14,0x1a0)==0,'fader at 0: scene 15 complete, FX1 mode switched')
+act(0,16);fader(30);call(u,0x8120264,SETTINGS,0x290,0);run_until_idle()
+check(current(u)==16 and sv(tget(u,0,0x4))==-1000,'Fade CC turned Off during a fade: the recall finishes at once')
+u.hook_del(fade_knob)
 
 print(H.checks,'scenes checks passed')

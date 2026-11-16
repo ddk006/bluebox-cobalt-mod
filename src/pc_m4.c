@@ -18,6 +18,7 @@ typedef void (*add_fn)(void *,unsigned,int);
 #define STOCK_ADD ((add_fn)0x0812028fu)
 void sat_defs(void *table,unsigned id,unsigned type,const char *label,int min,int max,const char *key);
 static void sc_boot(void);
+static void sc_fader(uint32_t msg);
 #define PC_TAG0 0x20bu
 #define PC_SLOTS 128u
 #define PC_EVT 0x1f0u /* A-menu items 0x1f0 Bank #, 0x1f1 Save Scene, 0x1f2 Scene */
@@ -28,7 +29,7 @@ static void sc_boot(void);
 #define PC_CH 0x28fu /* settings "PC Ch" (key scenech): 0 All, 1 None, 2..17 = MIDI channel 1..16;
                          filters both Bank Select and Program Change */
 #define PC_BANK_CH 0x290u /* s3/s3.1 "Bank Ch": unused since s3.2; now the scene fade (below) */
-#define PC_FADE PC_BANK_CH /* scene crossfade time, settings tag "scenefade", a row on the scene page */
+#define PC_FADE PC_BANK_CH /* scene crossfade controller: 0 Off, 1..119 = CC number; settings tag "fadecc", a row on the scene page */
 #define PC_MIDI_ROW 0x291u /* Tools row "MIDI Settings": a tap, or B with the row selected, opens the MIDI page */
 #define PC_DIN_OUT 0x292u /* m3 MIDI page "DIN Out" (key dinout): 0 Default, 1 USB Thru, 2 All Thru */
 #define PC_CC_SYNC 0x293u /* m8 MIDI page "Map CC Sync" (key ccsync, was m3 dinsync): 0 Off, 1 USB, 2 USB+MIDI Out, 3 MIDI Out */
@@ -45,11 +46,13 @@ static void sc_boot(void);
 #define PC_CLOCK_MS 500u /* MIDI realtime seen this recently = external clock */
 /* pending: Program Change from the IRQ (PC_MSG). want: Bank Select waiting to
  * load (PC_MSG), since: UI ms clock of its arrival. page: 0x100|page to return
- * to after a bank load. kb/kb_hash/kp_mode: unused since s3. */
-struct pc_state {uint32_t magic,pending,kb,kb_hash,want,since,page,kp_mode;};
+ * to after a bank load. fade: the Fade CC from the IRQ (PC_MSG); fade_cc: copy of
+ * the Fade CC setting for the IRQ (0 Off). kp_mode: unused since s3. */
+struct pc_state {uint32_t magic,pending,fade,fade_cc,want,since,page,kp_mode;};
 #define PC_STATE ((volatile struct pc_state *)0x38800fe0u)
 #define PC_MAGIC 0x50434d31u
 _Static_assert(0xfe0+sizeof(struct pc_state)<=0x1000,"PC state inside backup SRAM");
+_Static_assert(__builtin_offsetof(struct pc_state,fade)==8 && __builtin_offsetof(struct pc_state,fade_cc)==12,"CC stub reads 0x38800fec, writes 0x38800fe8");
 /* clock_ms: UI ms clock of the last MIDI realtime byte (IRQ). phase: bank load
  * sequence (PC_PHASE_*, plus PC_RESTART when Play follows); posted: phase
  * start; quiet: last time a load was still running. pos/moved: engine
@@ -87,7 +90,7 @@ static volatile struct pc_state *pc_state(void) {
     backup_enable();PWR_CR1|=1u<<8;
     volatile struct pc_state *s=PC_STATE;
     if(s->magic!=PC_MAGIC){
-        s->pending=0;s->kb=0;s->kb_hash=0;s->want=0;s->since=0;s->page=0;s->kp_mode=0;
+        s->pending=0;s->fade=0;s->fade_cc=0;s->want=0;s->since=0;s->page=0;s->kp_mode=0;
         volatile struct pc_transport *t=PC_TRANSPORT;
         t->clock_ms=0;t->phase=0;t->posted=0;t->quiet=0;t->pos=0;t->moved=0;t->bank=0;t->bank_lsb=0;
         s->magic=PC_MAGIC;
@@ -165,8 +168,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     STOCK_DEF(table,PC_SAVE_ROW,1,"Save Scene:",1,16,"scenesave");
     def_enum(table,PC_BANKNUM_ROW,"Bank #:",bank_num,PC_SLOTS+1,"bankassign"); /* 0 shows "None" */
     def_enum(table,PC_CH,"PC Ch:",channels,18,"scenech");
-    static const char *const fade[9]={"Off","0.1 s","0.25 s","0.5 s","1 s","2 s","4 s","8 s","16 s"};
-    def_enum(table,PC_FADE,"Fade:",fade,9,"scenefade");
+    static const char *const fade[120]={"Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110", "111", "112", "113", "114", "115", "116", "117", "118", "119"};
+    def_enum(table,PC_FADE,"Fade CC:",fade,120,"fadecc");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -182,7 +185,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     for(unsigned i=0;i<PC_SLOTS;i++)STOCK_ADD(set,PC_TAG0+i,0);
     STOCK_ADD(set,PC_BANK_CC,0);   /* MIDI page */
     STOCK_ADD(set,PC_CH,0);        /* All */
-    STOCK_ADD(set,PC_FADE,0);      /* scene fade: Off */
+    STOCK_ADD(set,PC_FADE,0);      /* scene Fade CC: Off */
     STOCK_ADD(set,PC_MIDI_ROW,0);  /* Tools row; a tap opens the MIDI page */
     STOCK_ADD(set,PC_DIN_OUT,0);   /* MIDI page: Default */
     STOCK_ADD(set,PC_CC_SYNC,1);   /* MIDI page: USB */
@@ -209,20 +212,28 @@ __attribute__((naked)) void pc_midi_isr(void) {
     "1: b.w 0x081033ba\n");
 }
 
-/* MIDI poll at 0x08103378 (cmp r0,#0xb0; beq 0x08103386): Bank Select MSB
- * (CC 0) and LSB (CC 32), any channel, store their values (the Tools "Bank CC"
- * setting picks one in the main loop); flags of the replayed cmp are kept for
- * the stock bhi at 0x0810337c. */
+/* MIDI poll at 0x08103378 (cmp r0,#0xb0; beq 0x08103386): the scene Fade CC
+ * (its number copied to 0x38800fec by the main loop, 0 Off) and Bank Select MSB
+ * (CC 0) and LSB (CC 32), any channel, store 0x1000|channel<<8|value (the
+ * Tools "Bank CC" setting picks MSB or LSB in the main loop); the Fade CC is
+ * checked first, so it may be any number. Flags of the replayed cmp are kept
+ * for the stock bhi at 0x0810337c; every CC still reaches the stock dispatch. */
 __attribute__((naked)) void pc_midi_cc(void) {
     __asm volatile(
     "cmp r0,#0xb0\n"
     "bne.w 0x0810337c\n"
     "ldrb r1,[r4,#1]\n"
-    "movw r2,#0x0fb8\n"
+    "movw r2,#0x0fe8\n"
+    "movt r2,#0x3880\n"
+    "ldr r3,[r2,#4]\n"
+    "cbz r3,3f\n"
+    "cmp r1,r3\n"
+    "beq 2f\n"
+    "3: movw r2,#0x0fb8\n"
     "cbz r1,2f\n"
+    "movw r2,#0x0fbc\n"
     "cmp r1,#32\n"
     "bne 1f\n"
-    "movw r2,#0x0fbc\n"
     "2: movt r2,#0x3880\n"
     "ldrb r1,[r4,#2]\n"
     "and r1,r1,#0x7f\n"
@@ -324,7 +335,7 @@ void pc_main(void *inputs) {
     volatile struct pc_transport *t=PC_TRANSPORT;
     uint32_t primask;
     __asm volatile("mrs %0,primask\ncpsid i":"=r"(primask)::"memory");
-    uint32_t p=s->pending,msb=t->bank,lsb=t->bank_lsb;s->pending=0;t->bank=0;t->bank_lsb=0;
+    uint32_t p=s->pending,msb=t->bank,lsb=t->bank_lsb,fade=s->fade;s->pending=0;t->bank=0;t->bank_lsb=0;s->fade=0;
     __asm volatile("msr primask,%0"::"r"(primask):"memory");
     uint32_t now=PC_UI_NOW;
     int playing=pc_playing(t,now);
@@ -336,6 +347,9 @@ void pc_main(void *inputs) {
         else {s->want=bank;s->since=now;}
     }
     if((p&PC_MSG) && pc_channel_ok(PC_CH,p))sc_request(p&0x7fu);
+    unsigned fade_cc=(unsigned)fw_get(PC_SETTINGS,PC_FADE);
+    s->fade_cc=fade_cc<120u ? fade_cc : 0u;
+    if((fade&PC_MSG) && pc_channel_ok(PC_CH,fade))sc_fader(fade&0x7fu);
     if(s->want&PC_MSG){
         if(busy)s->want=0;
         else if(now-s->since>=PC_SETTLE_MS){
@@ -907,8 +921,10 @@ struct sc_bank {
     uint32_t mo_clk_usb;
     /* m7: Clock Src value last seen + 1 (0 before the first look), for the band */
     uint32_t mo_clk_seen;
-    /* f1: crossfade of a recall: start time, length (0: none), values at the start */
-    uint32_t fade_at,fade_ms;
+    /* f2: crossfade by the Fade CC: on (a recall waits for the fader), fader
+     * position at the recall, last position (-1 none yet), values at the recall */
+    uint32_t fade_on;
+    int32_t fade_p0,fade_pos;
     int32_t from[SC_MAX];
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
@@ -972,7 +988,7 @@ static void sc_boot(void) {
     b->scroll_key=0;b->scroll_at=0;b->scroll_off=0;
     b->mo_attached=0;b->mo_loading=0;b->mo_pending=0;b->mo_at=0;b->mo_flip=0;b->mo_mark=0;b->mo_count=0;
     b->mo_dumping=0;b->mo_cursor=0;b->mo_busy_since=0;b->mo_din=0;b->mo_to=0;b->mo_clk_src=0;b->mo_clk_at=0;b->mo_clk_usb=0;b->mo_clk_seen=0;
-    b->fade_at=0;b->fade_ms=0;
+    b->fade_on=0;b->fade_p0=0;b->fade_pos=-1;
     b->magic=SC_MAGIC;
     p->bank=b;p->magic=SC_MAGIC;
 }
@@ -1033,13 +1049,25 @@ static void sc_recall(unsigned scene) {
     struct sc_bank *b=sc_bank();
     if(!b || scene<1u || scene>SC_SCENES || !(b->used>>(scene-1u)&1u))return;
     b->recall=scene;b->cursor=0;
-    /* Crossfade: continuous values move from where they are now; the rest
-     * (switches, modes, lists) change when the fade ends. */
-    static const uint16_t fade_ms[9]={0,100,250,500,1000,2000,4000,8000,16000};
-    unsigned f=(unsigned)fw_get(PC_SETTINGS,PC_FADE);
-    b->fade_ms=f<9u ? fade_ms[f] : 0u;
-    b->fade_at=PC_UI_NOW;
-    if(b->fade_ms)for(unsigned j=0;j<b->n;j++)b->from[j]=sc_get(b->item[j].cell,b->item[j].id);
+    /* Crossfade (Fade CC set): nothing moves until the fader does. Continuous
+     * values follow it from where they are now; the rest (switches, modes,
+     * lists) change at its far end. */
+    b->fade_on=fw_get(PC_SETTINGS,PC_FADE)!=0;
+    b->fade_p0=b->fade_pos<0 ? 0 : b->fade_pos;
+    if(b->fade_on)for(unsigned j=0;j<b->n;j++)b->from[j]=sc_get(b->item[j].cell,b->item[j].id);
+}
+/* Fade CC value (0..127) from the main loop. */
+static void sc_fader(uint32_t value) {
+    struct sc_bank *b=sc_bank();
+    if(b)b->fade_pos=(int32_t)value;
+}
+/* How far the fader has gone (0..1) from its position at the recall towards
+ * the far end: 127 from the lower half, 0 from the upper, so it works back
+ * and forth like a DJ crossfader. Moving back lowers it again. */
+static float sc_fade_amount(const struct sc_bank *b) {
+    int p0=b->fade_p0,pos=b->fade_pos<0 ? p0 : b->fade_pos;
+    float a=p0<64 ? (float)(pos-p0)/(float)(127-p0) : (float)(p0-pos)/(float)p0;
+    return a<0.0f ? 0.0f : a>1.0f ? 1.0f : a;
 }
 /* Parameter definitions (28 bytes per id: type at +2, min/max at +16/+20):
  * dB (7), 0..1000 (8), pan (9) and plain numbers with a wide range glide. */
@@ -1066,11 +1094,10 @@ static void sc_main(int busy) {
     }
     if(!b->recall)return;
     unsigned k=b->recall-1u,done=0;
-    if(b->fade_ms){
-        uint32_t t=PC_UI_NOW-b->fade_at;
-        if(t<b->fade_ms){
+    if(b->fade_on){
+        float a=fw_get(PC_SETTINGS,PC_FADE) ? sc_fade_amount(b) : 1.0f; /* Fade CC turned Off: finish */
+        if(a<1.0f){
             /* One pass: up to SC_BATCH moves, round robin over the scene. */
-            float a=(float)t/(float)b->fade_ms;
             for(unsigned seen=0;seen<b->n && done<SC_BATCH;seen++){
                 unsigned j=b->cursor;b->cursor=j+1u<b->n ? j+1u : 0u;
                 uint16_t cell=b->item[j].cell;
@@ -1082,7 +1109,7 @@ static void sc_main(int busy) {
             }
             return;
         }
-        b->fade_ms=0;b->cursor=0; /* the end: every value to the scene */
+        b->fade_on=0;b->cursor=0; /* the far end: every value to the scene */
     }
     while(b->cursor<b->n && done<SC_BATCH){
         unsigned j=b->cursor++;
