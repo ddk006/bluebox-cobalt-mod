@@ -281,19 +281,31 @@ that differ, without loading anything, so playback and recording carry on.
   - **Save Scene:** save the current state to that scene.
   - **Bank #:** give the project a number (None or 1–128) for MIDI Bank
     Select. A number another project has is refused ("BANK n IN USE").
-  - **X-Fade CC:** the MIDI controller that moves the crossfader (Off or CC
-    1–119, on the PC Ch channel), saved in `settings.tml`.
   - **Crossfader:** opens the crossfader page (tap the row, or Select).
+  - **X-Fade CC / X-Fade Ch:** the MIDI controller that moves the crossfader
+    (Off or CC 1–119) and its channel (All or 1–16). LEARN on the crossfader
+    page sets both. Saved in `settings.tml`.
+  - **X-Fade CV** (eurorack): the CV input that moves the crossfader. Off, CV1–6
+    +-5V (−5 V = A, +5 V = B) or CV1–6 0-5V (0 V = A, +5 V = B).
   Press A to leave. PROJ Save also applies the Bank # chosen there.
 - **Crossfader page** (as on the Octatrack): scenes 1–8 on the left are side
   A, 9–16 on the right side B, the fader above them mixes the two. Tap a scene
   to pick it for its side; it is heard at once unless the fader is fully on
   the other side. Tap an empty field, or hold a field for 1 s, to save the
-  current sound there. Move the fader by touching the strip at the top or with
-  the X-Fade CC. Levels, knobs, pan and tempo glide between A and B; switches,
-  modes and lists take A's setting below the middle and B's from it. So: fade
-  to B, shape a new sound, save it on the A side, fade back, and so on. A goes
-  back to the scene page.
+  current sound there. Move the fader by touching the fader row, with the
+  X-Fade CC or with the X-Fade CV. A CV moves the fader only while it changes,
+  so touch and CC still work while the CV rests. Levels, knobs, pan and tempo
+  glide between A and B; switches, modes and lists take A's setting below the
+  middle and B's from it. So: fade to B, shape a new sound, save it on the A
+  side, fade back, and so on. A goes back to the scene page.
+  - **LEARN:** tap it, then move a MIDI controller or a CV source. The first CC
+    becomes the X-Fade CC on its channel. On the eurorack, the first CV input
+    that moves by about 1 V becomes the X-Fade CV, keeping the 0-5V choice.
+    Tap LEARN again to cancel; it also stops by itself after 15 s.
+  - **FADER:** switches the crossfader off and on. When it is off, a tap on a
+    scene recalls it straight away, holding a field for 1 s saves, and the
+    fader, CC and CV do nothing. When it is on again, the sound follows the
+    fader. The setting is saved in the project.
 - **Quick save:** hold A for 2 s on MAIN. A band at the top shows progress,
   then saves the next empty scene. A new project starts at scene 1.
 - **MIDI:** Program Change recalls a scene: program 0 (PC 1 on gear that

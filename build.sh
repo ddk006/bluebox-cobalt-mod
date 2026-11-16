@@ -25,6 +25,7 @@ done
   -Wl,--defsym=cpu_present=0x$(awk '$3=="cpu_present"{print $1}' build/cm4.symbols) \
   -T src/pcm4.ld -o build/pcm4.elf src/pc_m4.c
 "$OBJCOPY" -O binary -j .cave build/pcm4.elf build/pcm4.bin
+"$OBJCOPY" -O binary -j .cavedata build/pcm4.elf build/pcm4data.bin
 "$NM" build/pcm4.elf > build/pcm4.symbols
 # alpha.6 overdub fix: in-place PCM24 loops for the stock 0x081-page bodies.
 "$OBJCOPY" -O binary -j .pcmhot build/cm4.elf build/pcmhot.bin

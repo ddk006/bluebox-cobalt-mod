@@ -168,18 +168,21 @@ if len((ROOT/'build'/'cm4.bin').read_bytes())>0x4000:raise ValueError('Cobalt M4
 pc_code=(ROOT/'build'/'pcm4.bin').read_bytes()
 if len(pc_code)>0x4000:raise ValueError('PC map code cave too large')
 add('M4 PC map code',0x080bc000,bytes(len(pc_code)),pc_code)
+pc_data=(ROOT/'build'/'pcm4data.bin').read_bytes()
+if len(pc_data)>0x4000 or 0x080d8000+len((ROOT/'build'/'cue4.bin').read_bytes())>0x080dc000:raise ValueError('PC map data cave too large or cue icon code reaches it')
+add('M4 PC map data',0x080dc000,bytes(len(pc_data)),pc_data)
 def bw(at,target):
  code=bytearray(branch(at,target));code[3]&=0xbf;return bytes(code)
 add('PC map MIDI program change capture',0x0810341a,bytes.fromhex('c028cdd1b2e7'),bw(0x0810341a,PC['pc_midi_isr'])+bytes.fromhex('00bf'))
 add('PC map main-loop dispatch',0x081269d8,branch(0x081269d8,0x08100730),branch(0x081269d8,PC['pc_main']))
 add('PC map settings defaults',0x08120aae,branch(0x08120aae,0x0812028e),branch(0x08120aae,PC['pc_settings_defaults']))
 add('PC map settings capacity 68 to 144',0x08120a56,bytes.fromhex('4421'),bytes.fromhex('9021'))
-for at,old,new in ((0x08134cce,'43f63410','44f66800'),(0x08134ce0,'43f63412','44f66a02')):  # 0x296 records (Bank # slots + scene/MIDI tags + DIN Out/Sync + Clock Src + Crossfader row)
+for at,old,new in ((0x08134cce,'43f63410','44f6a000'),(0x08134ce0,'43f63412','44f6a202')):  # 0x298 records (Bank # slots + scene/MIDI tags + DIN Out/Sync + Clock Src + Crossfader row + X-Fade Ch/CV)
  add('PC map name table size '+hex(at),at,bytes.fromhex(old),bytes.fromhex(new))
-add('PC map name table bound 0x08134c06',0x08134c06,bytes.fromhex('40f20a23'),bytes.fromhex('40f29523'))
+add('PC map name table bound 0x08134c06',0x08134c06,bytes.fromhex('40f20a23'),bytes.fromhex('40f29723'))
 for at in (0x0813600c,0x0813603a,0x0813606c,0x0813609a,0x081360ca,0x081360fa,0x0813613c):
- add('PC map name table bound '+hex(at),at,bytes.fromhex('40f20a22'),bytes.fromhex('40f29522'))
-add('PC map name lookup end',0x08136180,bytes.fromhex('04f564553435'),bytes.fromhex('04f590456835'))  # +0x4868
+ add('PC map name table bound '+hex(at),at,bytes.fromhex('40f20a22'),bytes.fromhex('40f29722'))
+add('PC map name lookup end',0x08136180,bytes.fromhex('04f564553435'),bytes.fromhex('04f59045a035'))  # +0x48a0
 add('PC map crossfader page touch',0x0810d3a4,branch(0x0810d3a4,0x08101c90),branch(0x0810d3a4,PC['pc_touch']))
 add('PC map rename follows name',0x0813e822,branch(0x0813e822,0x08122468),branch(0x0813e822,PC['pc_rename']))
 add('PC map delete clears slot',0x0813e5c0,branch(0x0813e5c0,0x08122f50),branch(0x0813e5c0,PC['pc_delete']))

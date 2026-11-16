@@ -17,6 +17,20 @@
   At most 24 changes per main-loop pass. Load Scene and Program Change recall
   at once, as before. Touch hook: the UI loop's touch read (desktop
   0x0810d3a4, euro 0x0810d564); the definition table grows to 0x296 records.
+- **Crossfader controls:** **LEARN** on the crossfader page takes the first
+  MIDI CC (1–119) as X-Fade CC together with its channel. The new **X-Fade Ch**
+  row (`xfch`, All or 1–16) replaces the PC Ch filter for the fader. On the
+  eurorack, LEARN also takes the first CV input that moves by about 1 V. The
+  new **X-Fade CV** row (`xfcv`: Off, CV1–6 +-5V, CV1–6 0-5V) lets a CV input
+  move the fader. The CV values come from the stock ADC path: centre minus
+  reading of CV 1–6, 8 frames at engine+0x78c0. +-5 V is taken as ±2000; the
+  real scale is not measured yet. **FADER** switches the crossfader off: a tap
+  then recalls a scene, holding a field for 1 s saves, and fader, CC and CV do
+  nothing. This is saved as `<scenes xo="1">`. New layout: buttons at the top,
+  fader row, 2 × 4 fields of 74 × 36. The Crossfader row moves up to fourth
+  place on the scene page. The definition table grows to 0x298 records. The
+  PC map's read-only data moves to its own cave at 0x080DC000, because the
+  code cave at 0x080BC000 was full.
 - **Eurorack port** (branch `euro`): `tools/retarget.py euro BLUEEURO.BIN`
   builds Cobalt for the bluebox eurorack 1.5.1 (address map, RAM and object
   offsets with evidence in `targets/`).

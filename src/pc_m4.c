@@ -20,6 +20,9 @@ void sat_defs(void *table,unsigned id,unsigned type,const char *label,int min,in
 static void sc_boot(void);
 static void sc_fader(uint32_t msg);
 static void xf_redraw(uint32_t now);
+static int xf_learning(void);
+static void xf_learned_cc(uint32_t msg);
+static void xf_cv(uint32_t now);
 #define PC_TAG0 0x20bu
 #define PC_SLOTS 128u
 #define PC_EVT 0x1f0u /* A-menu items 0x1f0 Bank #, 0x1f1 Save Scene, 0x1f2 Scene */
@@ -36,20 +39,26 @@ static void xf_redraw(uint32_t now);
 #define PC_CC_SYNC 0x293u /* m8 MIDI page "Map CC Sync" (key ccsync, was m3 dinsync): 0 Off, 1 USB, 2 USB+MIDI Out, 3 MIDI Out */
 #define PC_CLK_SRC 0x294u /* m6 MIDI page "Clock Src" (key clksrc): 0 MIDI In first, 1 USB first */
 #define PC_XF_ROW 0x295u /* scene page row "Crossfader": a tap, or Select with the row selected, opens the crossfader page */
-#define PC_LAST_TAG 0x295u
+#define PC_XF_CH 0x296u /* scene page "X-Fade Ch" (key xfch): 0 All, 1..16 = channel of the X-Fade CC; LEARN sets it */
+#define PC_XF_CV 0x297u /* scene page "X-Fade CV" (key xfcv): 0 Off, 1..6 = CV n for -5..+5 V, 7..12 = CV n-6 for 0..+5 V */
+#define PC_LAST_TAG 0x297u
+#define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
 #define PC_CELL_SCENES 0x17u /* edit page (B page) cells of our own */
 #define PC_CELL_MIDI 0x1bu
 #define PC_PAGE_MAIN 8u
 #define PC_PAGE_PROJ 0x18u
 #define PC_PAGE_PROJSET 0x19u /* B on PROJ: edit page for cell 0x16 */
 #define PC_MSG 0x1000u /* IRQ messages: 0x1000 | channel<<8 | value */
+#define PC_LEARN 0x80u /* fade_cc while the crossfader learns: the IRQ reports the next CC 1..119 */
+#define PC_LEARNED 0x2000u /* fade while learning: 0x2000 | channel<<8 | CC number */
 #define PC_SETTLE_MS 300u /* Bank Selects closer together than this: only the last one loads */
 #define PC_RESTART_MS 300u /* after a load completes, before restarting playback */
 #define PC_CLOCK_MS 500u /* MIDI realtime seen this recently = external clock */
 /* pending: Program Change from the IRQ (PC_MSG). want: Bank Select waiting to
  * load (PC_MSG), since: UI ms clock of its arrival. page: 0x100|page to return
- * to after a bank load. fade: the Fade CC from the IRQ (PC_MSG); fade_cc: copy of
- * the Fade CC setting for the IRQ (0 Off). kp_mode: unused since s3. */
+ * to after a bank load. fade: the Fade CC from the IRQ (PC_MSG), or while
+ * learning the first CC's number (PC_LEARNED); fade_cc: copy of the Fade CC
+ * setting for the IRQ (0 Off, PC_LEARN: catch any CC). kp_mode: unused since s3. */
 struct pc_state {uint32_t magic,pending,fade,fade_cc,want,since,page,kp_mode;};
 #define PC_STATE ((volatile struct pc_state *)0x38800fe0u)
 #define PC_MAGIC 0x50434d31u
@@ -173,6 +182,11 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     static const char *const fade[120]={"Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110", "111", "112", "113", "114", "115", "116", "117", "118", "119"};
     def_enum(table,PC_FADE,"X-Fade CC:",fade,120,"fadecc");
     def_enum(table,PC_XF_ROW,"Crossfader",midi_open,1,"xfopen"); /* one value: turning does nothing */
+    static const char *const xf_ch[17]={"All","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"};
+    def_enum(table,PC_XF_CH,"X-Fade Ch:",xf_ch,17,"xfch");
+    static const char *const xf_cv[13]={"Off","CV1 +-5V","CV2 +-5V","CV3 +-5V","CV4 +-5V","CV5 +-5V","CV6 +-5V",
+                                       "CV1 0-5V","CV2 0-5V","CV3 0-5V","CV4 0-5V","CV5 0-5V","CV6 0-5V"};
+    def_enum(table,PC_XF_CV,"X-Fade CV:",xf_cv,13,"xfcv");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -193,6 +207,8 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     STOCK_ADD(set,PC_DIN_OUT,0);   /* MIDI page: Default */
     STOCK_ADD(set,PC_CC_SYNC,1);   /* MIDI page: USB */
     STOCK_ADD(set,PC_CLK_SRC,0);   /* MIDI page: MIDI In first */
+    STOCK_ADD(set,PC_XF_CH,0);     /* X-Fade CC on any channel */
+    STOCK_ADD(set,PC_XF_CV,0);     /* X-Fade CV: Off */
 }
 
 /* MIDI poll (TIM4 IRQ) at 0x0810341a: r0=status, r4=message (data1 at +1).
@@ -219,8 +235,10 @@ __attribute__((naked)) void pc_midi_isr(void) {
  * (its number copied to 0x38800fec by the main loop, 0 Off) and Bank Select MSB
  * (CC 0) and LSB (CC 32), any channel, store 0x1000|channel<<8|value (the
  * Tools "Bank CC" setting picks MSB or LSB in the main loop); the Fade CC is
- * checked first, so it may be any number. Flags of the replayed cmp are kept
- * for the stock bhi at 0x0810337c; every CC still reaches the stock dispatch. */
+ * checked first, so it may be any number. While the crossfader learns
+ * (PC_LEARN there), CC 1..119 store 0x2000|channel<<8|number instead. Flags of
+ * the replayed cmp are kept for the stock bhi at 0x0810337c; every CC still
+ * reaches the stock dispatch. */
 __attribute__((naked)) void pc_midi_cc(void) {
     __asm volatile(
     "cmp r0,#0xb0\n"
@@ -230,6 +248,8 @@ __attribute__((naked)) void pc_midi_cc(void) {
     "movt r2,#0x3880\n"
     "ldr r3,[r2,#4]\n"
     "cbz r3,3f\n"
+    "cmp r3,#0x80\n"
+    "beq 4f\n"
     "cmp r1,r3\n"
     "beq 2f\n"
     "3: movw r2,#0x0fb8\n"
@@ -245,7 +265,17 @@ __attribute__((naked)) void pc_midi_cc(void) {
     "orr r1,r1,r3,lsl #8\n"
     "orr r1,r1,#0x1000\n"
     "str r1,[r2]\n"
-    "1: b.w 0x08103386\n");
+    "1: b.w 0x08103386\n"
+    "4: cmp r1,#0\n"
+    "beq 3b\n"
+    "cmp r1,#120\n"
+    "bhs 3b\n"
+    "ldrb r3,[r4]\n"
+    "and r3,r3,#0x0f\n"
+    "orr r1,r1,r3,lsl #8\n"
+    "orr r1,r1,#0x2000\n"
+    "str r1,[r2]\n"
+    "b 1b\n");
 }
 
 /* MIDI poll realtime path (clock, Start/Continue/Stop) at 0x081033e0: replay
@@ -330,6 +360,8 @@ static uint32_t pc_bank_target(unsigned value) {
  *   wait for the master's Start).
  * - Program Change (its channel): recall a scene; deferred until a bank load
  *   is done.
+ * - X-Fade CC (channel per X-Fade Ch) and X-Fade CV move the crossfader; while
+ *   it learns, the first CC or CV input that moves becomes its controller.
  * - Hold A on MAIN: quick save; a scene save then saves the project.
  * - Keeps the message band on screen (pc_band_refresh). */
 void pc_main(void *inputs) {
@@ -350,9 +382,11 @@ void pc_main(void *inputs) {
         else {s->want=bank;s->since=now;}
     }
     if((p&PC_MSG) && pc_channel_ok(PC_CH,p))sc_request(p&0x7fu);
-    unsigned fade_cc=(unsigned)fw_get(PC_SETTINGS,PC_FADE);
-    s->fade_cc=fade_cc<120u ? fade_cc : 0u;
-    if((fade&PC_MSG) && pc_channel_ok(PC_CH,fade))sc_fader(fade&0x7fu);
+    unsigned fade_cc=(unsigned)fw_get(PC_SETTINGS,PC_FADE),fade_ch=(unsigned)fw_get(PC_SETTINGS,PC_XF_CH);
+    s->fade_cc=xf_learning() ? PC_LEARN : fade_cc<120u ? fade_cc : 0u;
+    if(fade&PC_LEARNED)xf_learned_cc(fade);
+    else if((fade&PC_MSG) && (fade_ch==0u || ((fade>>8)&0xfu)==fade_ch-1u))sc_fader(fade&0x7fu);
+    xf_cv(now);
     if(s->want&PC_MSG){
         if(busy)s->want=0;
         else if(now-s->since>=PC_SETTLE_MS){
@@ -417,7 +451,7 @@ static void sc_clear(void);
 enum {F_SEL_SCENE,F_SEL_SAVE,F_SEL_BANK,F_BANK_HASH,F_PAGE,F_ABTN,F_HELD,F_DONE,F_TOAST,F_TOAST_UNTIL,
       F_AUTOSAVE,F_BAND,F_REDRAWN,F_SCROLL_KEY,F_SCROLL_AT,F_SCROLL_OFF,F_XF_DRAW};
 #define PC_TOAST(kind,n) (((kind)<<8)|(n))
-enum {T_RECALL=1,T_EMPTY,T_SAVED,T_NOSLOTS,T_BANK,T_BANK_CLEAR,T_BANK_USED,T_MOUT,T_CLOCK};
+enum {T_RECALL=1,T_EMPTY,T_SAVED,T_NOSLOTS,T_BANK,T_BANK_CLEAR,T_BANK_USED,T_MOUT,T_CLOCK,T_LEARN_CC,T_LEARN_CV};
 static void pc_toast(unsigned kind,unsigned n) {
     uint32_t *t=sc_field(F_TOAST),*u=sc_field(F_TOAST_UNTIL);
     if(t && u){*t=PC_TOAST(kind,n);*u=PC_UI_NOW+1500u;}
@@ -497,8 +531,10 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
         append(list,PC_SCENE_ROW,(int)*sc_field(F_SEL_SCENE));
         append(list,PC_SAVE_ROW,(int)*sc_field(F_SEL_SAVE));
         append(list,PC_BANKNUM_ROW,(int)*sc_field(F_SEL_BANK));
+        append(list,PC_XF_ROW,0); /* before the X-Fade rows: on screen without scrolling */
         append(list,PC_FADE,fw_get(PC_SETTINGS,PC_FADE));
-        append(list,PC_XF_ROW,0);
+        append(list,PC_XF_CH,fw_get(PC_SETTINGS,PC_XF_CH));
+        if(PC_CV)append(list,PC_XF_CV,fw_get(PC_SETTINGS,PC_XF_CV));
         return 1;
     }
     if(*cell==PC_CELL_MIDI){
@@ -520,7 +556,7 @@ static unsigned pc_clamp(int v,unsigned lo,unsigned hi) {return v<(int)lo ? lo :
 void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
     typedef void (*knob_fn)(void *,uint16_t *,unsigned,int,int);
     knob_fn knob=(knob_fn)0x08124b45u;
-    if(*cell==PC_CELL_SCENES && id==PC_FADE){
+    if(*cell==PC_CELL_SCENES && (id==PC_FADE || id==PC_XF_CH || id==PC_XF_CV)){
         uint16_t settings=0x18;
         knob(session,&settings,id,value,extra);
         pc_save();
@@ -565,11 +601,13 @@ int pc_list_event(uint8_t *list,struct pc_event *e) {
     }
     return r;
 }
-/* Select on the scene page: act on the selected row. */
+/* Select on the scene page: act on the selected row (list at edit+0x9c8). */
 static void pc_scene_action(void) {
     uint8_t *edit=pc_app_view(0x1e978u,PC_EDIT_VT);
     if(!edit)return;
-    unsigned row=*(uint32_t *)(edit+0x9c8u+0x99ecu);
+    uint8_t *list=edit+0x9c8u;
+    unsigned row=*(uint32_t *)(list+0x99ecu);
+    if(row<*(uint32_t *)(list+0x99e8u) && *(uint16_t *)(list+0xe8u+row*0x330u+0x32cu)==PC_XF_ROW){pc_open_xf(1);return;}
     if(row==0){
         unsigned n=*sc_field(F_SEL_SCENE);
         if(sc_used(n)){sc_recall(n);pc_toast(T_RECALL,n);} else pc_toast(T_EMPTY,n);
@@ -584,7 +622,7 @@ static void pc_scene_action(void) {
         pc_forget(h);
         if(n){PC_TAG_SET(PC_SETTINGS,PC_TAG0+n-1u,(int)h);pc_toast(T_BANK,n);} else pc_toast(T_BANK_CLEAR,0);
         pc_save();
-    } else if(row==4)pc_open_xf(1);
+    }
 }
 /* Edit page event method (vtable slot 0x0814ca40, stock 0x0813cfb8): the
  * scene page's Select button. */
@@ -800,6 +838,8 @@ static int pc_message(char *out,unsigned *fill) {
     case T_BANK_USED: d=pc_cat(pc_num(pc_cat(d,"BANK "),n)," IN USE"); break;
     case T_MOUT: d=mo_message(d,n); break;
     case T_CLOCK: d=pc_cat(d,n ? "CLOCK SRC: USB-B > USB-A > MIDI IN" : "CLOCK SRC: MIDI IN > USB-B > USB-A"); break;
+    case T_LEARN_CC: d=pc_num(pc_cat(d,"X-FADE CC "),n); break;
+    case T_LEARN_CV: d=pc_num(pc_cat(d,"X-FADE CV "),n); break;
     default: return 0;
     }
     return 1;
@@ -918,6 +958,7 @@ void pc_delete(void *session,const char *name) {
 #define SC_CELL_MAX 64u
 struct sc_item {uint8_t cell,pad;uint16_t id;};
 struct sc_entry {uint16_t id,pad;int32_t value;}; /* native tag-table entry */
+#define XF_CV_NONE 0x100u
 struct sc_bank {
     uint32_t magic,n,used,current,recall,cursor,want,spare;
     struct sc_item item[SC_MAX];
@@ -949,6 +990,11 @@ struct sc_bank {
      * touch (XF_T_*), its slot and start */
     uint32_t xf_a,xf_b,xf_pos,xf_todo,xf_cursor,xf_draw,xf_drawn;
     uint32_t xf_touch,xf_slot,xf_down;
+    /* x2: crossfader off (taps recall scenes), LEARN start (0 off), CV
+     * fader position last applied (XF_CV_NONE: apply the next reading) and
+     * the X-Fade CV it came from, CV readings when LEARN started (valid) */
+    uint32_t xf_off,xf_learn,xf_cvpos,xf_cvsel,xf_cvsnap_ok;
+    int32_t xf_cvsnap[6];
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
 #define SC_PTR ((volatile struct sc_ptr *)0x38800fd0u)
@@ -1013,6 +1059,7 @@ static void sc_boot(void) {
     b->mo_dumping=0;b->mo_cursor=0;b->mo_busy_since=0;b->mo_din=0;b->mo_to=0;b->mo_clk_src=0;b->mo_clk_at=0;b->mo_clk_usb=0;b->mo_clk_seen=0;
     b->xf_a=1;b->xf_b=9;b->xf_pos=0;b->xf_todo=0;b->xf_cursor=0;b->xf_draw=0;b->xf_drawn=0;
     b->xf_touch=0;b->xf_slot=0;b->xf_down=0;
+    b->xf_off=0;b->xf_learn=0;b->xf_cvpos=XF_CV_NONE;b->xf_cvsel=0;b->xf_cvsnap_ok=0;
     b->magic=SC_MAGIC;
     p->bank=b;p->magic=SC_MAGIC;
 }
@@ -1040,7 +1087,7 @@ static void sc_clear(void) {
     if(!b)return;
     b->used=0;b->current=0;b->recall=0;b->cursor=0;b->want=0;b->n=0;
     b->sel_scene=1;b->sel_save=1;
-    b->xf_a=1;b->xf_b=9;b->xf_todo=0;
+    b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_off=0;
 }
 static unsigned sc_current(void) {struct sc_bank *b=sc_bank();return b ? b->current : 0;}
 static int sc_used(unsigned scene) {struct sc_bank *b=sc_bank();return b && scene>=1u && scene<=SC_SCENES && (b->used>>(scene-1u)&1u);}
@@ -1086,17 +1133,98 @@ static int sc_glides(unsigned id) {
     return d[2]==7u || d[2]==8u || d[2]==9u || (d[2]==1u && hi-lo>=24);
 }
 /* Crossfader (Octatrack style): side A holds one of scenes 1-8, side B one of
- * 9-16, the fader (X-Fade CC or the page) mixes them: dB, 0..1000, pan and
- * wide numbers in proportion, switches, modes and lists from A below the
- * middle and from B from it. Values move only when the fader or a scene that
- * is heard changes, so edits made in between stay until then. */
+ * 9-16, the fader (X-Fade CC, X-Fade CV or the page) mixes them: dB, 0..1000,
+ * pan and wide numbers in proportion, switches, modes and lists from A below
+ * the middle and from B from it. Values move only when the fader or a scene
+ * that is heard changes, so edits made in between stay until then. Switched
+ * off (FADER on the page), the fader does nothing and a tap recalls a scene. */
 static void xf_changed(struct sc_bank *b) {b->xf_todo=b->n;b->xf_cursor=0;b->xf_draw=1;}
 static void xf_set_pos(unsigned pos) {
     struct sc_bank *b=sc_bank();
-    if(!b || pos>127u)return;
+    if(!b || pos>127u || b->xf_off)return;
     if(b->xf_pos!=pos){b->xf_pos=pos;xf_changed(b);}
 }
 static void sc_fader(uint32_t value) {xf_set_pos(value);}
+/* LEARN on the page: the first CC 1..119 (the IRQ reports it while fade_cc is
+ * PC_LEARN) becomes X-Fade CC on its channel, or the first CV input that moves
+ * by XF_CV_LEARN becomes X-Fade CV (keeping the 0..+5 V choice). Ends after
+ * XF_LEARN_MS. */
+#define XF_LEARN_MS 15000u
+#define XF_CV_LEARN 400 /* about 1 V, if XF_CV_FULL is 5 V */
+/* CV inputs (eurorack): the ADC callback 0x081043a0 passes centre - reading of
+ * CV 1-6 (12-bit ADC, centre 0x800 or the calibration) to 0x08108ad0, which
+ * keeps 8 frames of 6 int16 at engine+0x78c0 and counts frames at +0x7938.
+ * XF_CV_FULL is taken as 5 V (12-bit half range less a margin): not measured. */
+#define XF_CV_RING 0x78c0u
+#define XF_CV_FRAMES 0x7938u
+#define XF_CV_FULL 2000
+static int xf_learning(void) {struct sc_bank *b=sc_bank();return b && b->xf_learn;}
+static void xf_learn_end(struct sc_bank *b,unsigned kind,unsigned n) {
+    b->xf_learn=0;b->xf_draw=1;
+    if(kind){pc_save();pc_toast(kind,n);}
+}
+static void xf_learn_toggle(struct sc_bank *b,uint32_t now) {
+    if(b->xf_learn){xf_learn_end(b,0,0);return;}
+    b->xf_learn=now|1u;b->xf_cvsnap_ok=0;b->xf_draw=1;
+}
+static void xf_learned_cc(uint32_t msg) {
+    struct sc_bank *b=sc_bank();
+    unsigned cc=msg&0x7fu;
+    if(!b || !b->xf_learn || !cc || cc>=120u)return;
+    PC_TAG_SET(PC_SETTINGS,PC_FADE,(int)cc);
+    PC_TAG_SET(PC_SETTINGS,PC_XF_CH,(int)((msg>>8)&0xfu)+1);
+    xf_learn_end(b,T_LEARN_CC,cc);
+}
+/* Average of the 8 frames per input; 0 without CV inputs. */
+static int xf_cv_read(int32_t *v) {
+    if(!PC_CV)return 0;
+    uint32_t e=PC_ENGINE;
+    if(!pc_ram(e,XF_CV_FRAMES+4u))return 0;
+    const volatile int16_t *ring=(const volatile int16_t *)(e+XF_CV_RING);
+    for(unsigned i=0;i<6u;i++){
+        int32_t sum=0;
+        for(unsigned f=0;f<8u;f++)sum+=ring[f*6u+i];
+        v[i]=sum/8;
+    }
+    return 1;
+}
+static void xf_cv(uint32_t now) {
+    struct sc_bank *b=sc_bank();
+    int32_t v[6];
+    if(!b)return;
+    if(b->xf_learn && now-b->xf_learn>=XF_LEARN_MS){xf_learn_end(b,0,0);return;}
+    if(!xf_cv_read(v))return;
+    unsigned sel=(unsigned)fw_get(PC_SETTINGS,PC_XF_CV);
+    if(b->xf_learn){
+        if(!b->xf_cvsnap_ok){for(unsigned i=0;i<6u;i++)b->xf_cvsnap[i]=v[i];b->xf_cvsnap_ok=1;return;}
+        for(unsigned i=0;i<6u;i++){
+            int32_t d=v[i]-b->xf_cvsnap[i];
+            if(d>XF_CV_LEARN || d<-XF_CV_LEARN){
+                PC_TAG_SET(PC_SETTINGS,PC_XF_CV,(int)((sel>6u && sel<=12u ? 7u : 1u)+i));
+                b->xf_cvpos=XF_CV_NONE;
+                xf_learn_end(b,T_LEARN_CV,i+1u);
+                return;
+            }
+        }
+        return;
+    }
+    if(!sel || sel>12u || b->xf_off){b->xf_cvpos=XF_CV_NONE;return;}
+    int32_t x=v[(sel-1u)%6u];
+    int p=sel<=6u ? (int)((x+XF_CV_FULL)*127/(2*XF_CV_FULL)) : (int)(x*127/XF_CV_FULL);
+    unsigned pos=p<0 ? 0u : p>127 ? 127u : (unsigned)p;
+    /* Only a move of the CV moves the fader (2 steps against noise, the ends
+     * exactly), so touch and CC still work while the CV rests. */
+    int d=(int)pos-(int)b->xf_cvpos;
+    if(b->xf_cvpos==XF_CV_NONE || sel!=b->xf_cvsel || d>=2 || d<=-2 || (pos!=b->xf_cvpos && (pos==0u || pos==127u))){
+        b->xf_cvpos=pos;b->xf_cvsel=sel;
+        xf_set_pos(pos);
+    }
+}
+/* FADER on the page: off, taps recall scenes; on again, the sound follows the fader. */
+static void xf_off_toggle(struct sc_bank *b) {
+    b->xf_off=!b->xf_off;b->xf_draw=1;b->xf_cvpos=XF_CV_NONE;
+    if(!b->xf_off)xf_changed(b);
+}
 /* Choose scene n for its side; it is heard unless the fader is fully on the other side. */
 static void xf_pick(unsigned n) {
     struct sc_bank *b=sc_bank();
@@ -1146,24 +1274,26 @@ static void sc_main(int busy) {
     if(b->cursor>=b->n){b->current=b->recall;b->recall=0;mo_request(PC_UI_NOW,50u,MO_TO_USB|MO_TO_DIN);}
 }
 
-/* Crossfader page (320x240, top-left origin): fader strip y 24-63 with
- * "A n" left and "B n" right of the bar, then scenes 1-8 (side A, left) and
- * 9-16 (side B, right) as 2 x 4 fields of 74 x 40. A tap picks a scene for
- * its side; a tap on an empty field, or holding a field for 1 s, saves the
- * current sound there. Touching the strip moves the fader. */
+/* Crossfader page (320x240, top-left origin): buttons FADER (on/off) and LEARN
+ * at y 26-49 with the controllers at the right, the fader y 52-87 with "A n"
+ * left and "B n" right of the bar, then scenes 1-8 (side A, left) and 9-16
+ * (side B, right) as 2 x 4 fields of 74 x 36. A tap picks a scene for its side
+ * (fader off: recalls it); a tap on an empty field, or holding a field for
+ * 1 s, saves the current sound there. Touching the fader row moves it. */
 #define XF_TOP 24u
-#define XF_GY 66u
+#define XF_FY 52u
+#define XF_GY 88u
 #define XF_BX 64
 #define XF_BW 192
 #define XF_HOLD_MS 1000u
 #define XF_ACCENT 0x9455fau
 enum {XF_T_NONE=1,XF_T_PASS,XF_T_FADER,XF_T_SLOT};
 static unsigned xf_x(unsigned k) {return (k<8u ? 4u : 166u)+(k&1u)*76u;}
-static unsigned xf_y(unsigned k) {return XF_GY+((k&7u)>>1)*42u;}
+static unsigned xf_y(unsigned k) {return XF_GY+((k&7u)>>1)*38u;}
 static unsigned xf_slot_at(int x,int y) {
     for(unsigned k=0;k<SC_SCENES;k++){
         int x0=(int)xf_x(k),y0=(int)xf_y(k);
-        if(x>=x0 && x<x0+74 && y>=y0 && y<y0+40)return k+1u;
+        if(x>=x0 && x<x0+74 && y>=y0 && y<y0+36)return k+1u;
     }
     return 0;
 }
@@ -1183,26 +1313,55 @@ static void xf_fill(struct pc_canvas *c,unsigned x,unsigned y,unsigned w,unsigne
         else for(unsigned i=0;i<w;i++){p[3*i]=px[0];p[3*i+1]=px[1];p[3*i+2]=px[2];}
     }
 }
+/* Button of 96 x 24: filled when on, outlined when off; 2x label centred. */
+static void xf_button(struct pc_canvas *c,unsigned x,const char *label,int on) {
+    xf_fill(c,x,XF_TOP+2u,96,24,on ? XF_ACCENT : 0x3a3a3au);
+    if(!on)xf_fill(c,x+2u,XF_TOP+4u,92,20,0x141414u);
+    unsigned n=0;while(label[n])n++;
+    pc_text_k(c,x+(96u-12u*n)/2u,XF_TOP+5u,label,on ? 0xffffffu : 0xb0b0b0u,2);
+}
 __attribute__((noinline)) static void xf_draw(struct pc_canvas *c) {
     struct sc_bank *b=sc_bank();
     if(!b)return;
     xf_fill(c,0,XF_TOP,320,240u-XF_TOP,0);
-    char t[8];
+    char t[20];
+    xf_button(c,4,"FADER",!b->xf_off);
+    xf_button(c,104,"LEARN",b->xf_learn!=0u);
+    if(b->xf_learn){
+        pc_text(c,206,XF_TOP+5u,"MOVE A CC",0xffffffu);
+        pc_text(c,206,XF_TOP+16u,PC_CV ? "OR A CV" : "",0xffffffu);
+    } else {
+        unsigned cc=(unsigned)fw_get(PC_SETTINGS,PC_FADE),ch=(unsigned)fw_get(PC_SETTINGS,PC_XF_CH);
+        char *d=t;
+        if(cc && cc<120u){
+            d=pc_num(pc_cat(d,"CC "),cc);
+            if(ch && ch<=16u)pc_num(pc_cat(d," CH "),ch);
+        } else pc_cat(d,"CC OFF");
+        pc_text(c,206,XF_TOP+5u,t,0xb0b0b0u);
+        if(PC_CV){
+            unsigned cv=(unsigned)fw_get(PC_SETTINGS,PC_XF_CV);
+            if(cv && cv<=12u)pc_cat(pc_num(pc_cat(t,"CV "),(cv-1u)%6u+1u),cv<=6u ? " +-5V" : " 0-5V");
+            else pc_cat(t,"CV OFF");
+            pc_text(c,206,XF_TOP+16u,t,0xb0b0b0u);
+        }
+    }
+    uint32_t ink=b->xf_off ? 0x6a6a6au : 0xffffffu;
     pc_num(pc_cat(t,"A"),b->xf_a);
-    pc_text_k(c,6,XF_TOP+12u,t,0xffffffu,2);
+    pc_text_k(c,6,XF_FY+10u,t,ink,2);
     pc_num(pc_cat(t,"B"),b->xf_b);
     unsigned n=0;while(t[n])n++;
-    pc_text_k(c,314u-12u*n,XF_TOP+12u,t,0xffffffu,2);
-    xf_fill(c,XF_BX,XF_TOP+18u,XF_BW,4,0x3a3a3au);
-    xf_fill(c,(unsigned)XF_BX+b->xf_pos*(XF_BW-8u)/127u,XF_TOP+10u,8,20,XF_ACCENT);
+    pc_text_k(c,314u-12u*n,XF_FY+10u,t,ink,2);
+    xf_fill(c,XF_BX,XF_FY+16u,XF_BW,4,0x3a3a3au);
+    if(!b->xf_off)xf_fill(c,(unsigned)XF_BX+b->xf_pos*(XF_BW-8u)/127u,XF_FY+8u,8,20,XF_ACCENT);
+    unsigned now=b->recall ? b->recall : b->current;
     for(unsigned k=0;k<SC_SCENES;k++){
         unsigned x=xf_x(k),y=xf_y(k),s=k+1u;
-        int sel=s==b->xf_a || s==b->xf_b,used=b->used>>k&1u;
-        if(used || sel)xf_fill(c,x,y,74,40,sel ? XF_ACCENT : 0x3a3a3au);
-        else {xf_fill(c,x,y,74,40,0x3a3a3au);xf_fill(c,x+2u,y+2u,70,36,0x141414u);}
+        int sel=b->xf_off ? s==now : s==b->xf_a || s==b->xf_b,used=b->used>>k&1u;
+        if(used || sel)xf_fill(c,x,y,74,36,sel ? XF_ACCENT : 0x3a3a3au);
+        else {xf_fill(c,x,y,74,36,0x3a3a3au);xf_fill(c,x+2u,y+2u,70,32,0x141414u);}
         pc_num(t,s);
         unsigned w=s<10u ? 10u : 22u;
-        pc_text_k(c,x+(74u-w)/2u,y+13u,t,used || sel ? 0xffffffu : 0x6a6a6au,2);
+        pc_text_k(c,x+(74u-w)/2u,y+9u,t,used || sel ? 0xffffffu : 0x6a6a6au,2);
     }
 }
 /* Ask for a screen flip while the page changed (at most every 40 ms). */
@@ -1220,11 +1379,15 @@ static void xf_release(struct sc_bank *b,uint32_t now) {
         sc_save(k);pc_toast(T_SAVED,k);*sc_field(F_AUTOSAVE)=1;
         *(k<=8u ? &b->xf_a : &b->xf_b)=k; /* the sound is already this scene: nothing moves */
         b->xf_draw=1;
+    } else if(b->xf_off){
+        *(k<=8u ? &b->xf_a : &b->xf_b)=k;
+        sc_recall(k);pc_toast(T_RECALL,k);b->xf_draw=1;
     } else xf_pick(k);
 }
 /* UI loop touch read (0x0810d3a4, bl 0x08101c90 -> 1 with fresh points: count
  * at +0, first point x/y at +4/+6, y from the bottom). On the crossfader page
- * a touch below the header is ours: the app gets a count of 0 for it. */
+ * a touch below the header is ours: the app gets a count of 0 for it. The
+ * buttons act when touched. */
 int pc_touch(void *touch,uint8_t *points) {
     int r=((int (*)(void *,uint8_t *))0x08101c91u)(touch,points);
     struct sc_bank *b=sc_bank();
@@ -1240,8 +1403,12 @@ int pc_touch(void *touch,uint8_t *points) {
     }
     if(!b->xf_touch){
         unsigned k=xf_slot_at(x,y);
-        b->xf_touch=y<(int)XF_TOP ? XF_T_PASS : y<(int)XF_GY ? XF_T_FADER : k ? XF_T_SLOT : XF_T_NONE;
+        b->xf_touch=y<(int)XF_TOP ? XF_T_PASS : y<(int)XF_FY ? XF_T_NONE : y<(int)XF_GY ? XF_T_FADER : k ? XF_T_SLOT : XF_T_NONE;
         b->xf_slot=k;b->xf_down=now;
+        if(y>=(int)XF_TOP && y<(int)XF_FY){
+            if(x<100)xf_off_toggle(b);
+            else if(x<200)xf_learn_toggle(b,now);
+        }
     }
     if(b->xf_touch==XF_T_FADER){
         int p=(x-XF_BX)*127/(XF_BW-8);
@@ -1269,6 +1436,7 @@ void *sc_write(void *session,void *child,void *doc) {
     x_setint(scenes,"current",(int)b->current);
     x_setint(scenes,"xa",(int)b->xf_a);
     x_setint(scenes,"xb",(int)b->xf_b);
+    if(b->xf_off)x_setint(scenes,"xo",1);
     for(unsigned k=0;k<SC_SCENES;k++){
         if(!(b->used>>k&1u))continue;
         void *scene=x_el(X_INSERT(scenes,X_NEW(doc,"scene")));
@@ -1300,7 +1468,7 @@ void sc_read(void *doc) {
     struct sc_bank *b=sc_bank();
     if(b){
         b->recall=0;b->cursor=0;b->used=0;b->current=0;
-        b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_draw=1;
+        b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_draw=1;b->xf_off=0;b->xf_learn=0;b->xf_cvpos=XF_CV_NONE;
         sc_template(b);
         void *e=X_FIRST(doc,"document");
         if(e)e=X_FIRST(e,"session");
@@ -1330,6 +1498,8 @@ void sc_read(void *doc) {
         int xa=0,xb=0;
         if(scenes && x_getint(scenes,"xa",&xa) && xa>=1 && xa<=8)b->xf_a=(unsigned)xa;
         if(scenes && x_getint(scenes,"xb",&xb) && xb>=9 && xb<=(int)SC_SCENES)b->xf_b=(unsigned)xb;
+        int xo=0;
+        if(scenes && x_getint(scenes,"xo",&xo))b->xf_off=xo!=0;
         int cur=0;
         if(scenes && x_getint(scenes,"current",&cur) && cur>=1 && cur<=(int)SC_SCENES && (b->used>>(cur-1)&1u))
             b->current=(unsigned)cur;

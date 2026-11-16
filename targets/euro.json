@@ -10,6 +10,7 @@
   "M7 adaptive gate code",
   "M7 phones auto cue code",
   "M4 PC map code",
+  "M4 PC map data",
   "Tools mod version label",
   "purple UI palette slot",
   "theme palette slot",
@@ -227,6 +228,12 @@
   ],
   "src/pc_m4.c": [
    {
+    "old": "#define PC_CV 0 ",
+    "new": "#define PC_CV 1 ",
+    "count": 1,
+    "why": "the eurorack has 6 CV inputs (CV In 1-6, +/- 5 V by the manual); the ADC callback 0x081043a0 reads them through a 3-way multiplexer (ADC1 ranks 9/10, index +0x2628) and hands centre - reading to 0x08108ad0, which keeps 8 frames of 6 int16 at engine+0x78c0, frame counter +0x7938 (engine pointer 0x3000b4d4)"
+   },
+   {
     "old": "#define PC_BTN(k) (*(volatile uint8_t *)(0x30009d80u+24u*(k)+0x0eu))\n#define PC_BTN_PRESS(k) (*(volatile uint16_t *)(0x30009d80u+24u*(k)+0x08u))",
     "new": "/* Eurorack: a 4 x 4 key matrix instead of GPIO buttons. Its code table at\n * 0x3001f7d8 (16 keys of 16 B: press code +0, release code +8, level +0xc,\n * 1 = up, 0 = held; checked in the simulation) holds A as press code 0x0c. */\n#define PC_KEY(k) ((volatile const uint32_t *)(0x3001f7d8u+16u*(k)))",
     "why": "desktop buttons are GPIO lines debounced into 0x30009d80 (init 0x081047a0); the euro scans a key matrix (0x08138a84) into the code table 0x3001f7d8, A = press code 0x0c at row 0 / column 1, level +0xc (sim: 1 up, 0 while held)"
@@ -259,6 +266,12 @@
   ],
   "tests/test_scenes.py": [
    {
+    "old": "CV=False  #",
+    "new": "CV=True  #",
+    "count": 1,
+    "why": "X-Fade CV row and the CV crossfader checks (eurorack only)"
+   },
+   {
     "old": "snew[:7]==sold and len(sold)==7",
     "new": "snew[:6]==sold and len(sold)==6",
     "count": 1,
@@ -271,8 +284,8 @@
     "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
    },
    {
-    "old": "len(saved)==7+SLOTS+7",
-    "new": "len(saved)==6+SLOTS+7",
+    "old": "len(saved)==7+SLOTS+9",
+    "new": "len(saved)==6+SLOTS+9",
     "count": 1,
     "why": "the euro settings.tml has six stock tags"
    },
