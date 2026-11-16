@@ -281,15 +281,19 @@ that differ, without loading anything, so playback and recording carry on.
   - **Save Scene:** save the current state to that scene.
   - **Bank #:** give the project a number (None or 1–128) for MIDI Bank
     Select. A number another project has is refused ("BANK n IN USE").
-  - **Fade CC:** crossfade by a MIDI controller (Off or CC 1–119, on the PC
-    Ch channel), saved in `settings.tml`. With it set, a recall (Load Scene
-    or Program Change) waits for the fader: levels, knobs, pan and tempo
-    follow it from where they are to the scene; switches, modes and lists
-    change when it reaches the far end. The far end is 127 if the fader was
-    in the lower half at the recall, 0 if it was in the upper half, so it
-    goes back and forth like a DJ crossfader. Until the fader moves nothing
-    changes, so with no controller set Fade CC to Off.
+  - **X-Fade CC:** the MIDI controller that moves the crossfader (Off or CC
+    1–119, on the PC Ch channel), saved in `settings.tml`.
+  - **Crossfader:** opens the crossfader page (tap the row, or Select).
   Press A to leave. PROJ Save also applies the Bank # chosen there.
+- **Crossfader page** (as on the Octatrack): scenes 1–8 on the left are side
+  A, 9–16 on the right side B, the fader above them mixes the two. Tap a scene
+  to pick it for its side; it is heard at once unless the fader is fully on
+  the other side. Tap an empty field, or hold a field for 1 s, to save the
+  current sound there. Move the fader by touching the strip at the top or with
+  the X-Fade CC. Levels, knobs, pan and tempo glide between A and B; switches,
+  modes and lists take A's setting below the middle and B's from it. So: fade
+  to B, shape a new sound, save it on the A side, fade back, and so on. A goes
+  back to the scene page.
 - **Quick save:** hold A for 2 s on MAIN. A band at the top shows progress,
   then saves the next empty scene. A new project starts at scene 1.
 - **MIDI:** Program Change recalls a scene: program 0 (PC 1 on gear that

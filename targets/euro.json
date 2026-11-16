@@ -85,6 +85,7 @@
   "PC map name table bound",
   "PC map name table size",
   "PC map rename follows name",
+  "PC map crossfader page touch",
   "PC map settings capacity 68 to 144",
   "PC map settings defaults",
   "PROJ Save assigns the chosen Bank #",
@@ -441,7 +442,7 @@
   {
    "old": "0x150cb0",
    "new": "0x1f5a08",
-   "count": 4,
+   "count": 5,
    "why": "app object size: the allocation literal after the app setup (desktop 0x0810d568 = 0x150cb0, euro 0x0810d728 = 0x1f5a08)"
   },
   {

@@ -2,16 +2,21 @@
 
 ## Unreleased
 
-- **Scene crossfade by MIDI CC:** a **Fade CC** row on the scene page (Off or
-  CC 1–119, saved in `settings.tml` as `fadecc`, tag of the former Bank Ch
-  setting; listens on the PC Ch channel). With it set, a recall (Load Scene or
-  Program Change) waits for that controller: dB, 0–1000, pan and wide numeric
-  values such as BPM follow the fader from their current values, switches,
-  modes and lists change when it reaches the far end. The far end is 127 when
-  the fader sat in the lower half at the recall and 0 from the upper half, so
-  it works back and forth like a DJ crossfader. At most 24 changes per
-  main-loop pass, as before. The Fade CC is taken before Bank Select, and the
-  stock CC mapping still sees it.
+- **Crossfader page (Octatrack style):** a **Crossfader** row on the scene
+  page opens it (tap, or Select with the row selected; A goes back). Side A
+  holds one of scenes 1–8, side B one of 9–16, shown as two 2 × 4 fields of
+  touch buttons with the fader above them. The fader (touch, or the
+  **X-Fade CC** set on the scene page: Off or CC 1–119 on the PC Ch channel,
+  `settings.tml` key `fadecc`) mixes A and B: dB, 0–1000, pan and wide
+  numeric values such as BPM in proportion, switches, modes and lists from A
+  below the middle and from B from it. A tap picks a scene for its side (heard
+  at once unless the fader is fully on the other side); a tap on an empty
+  field, or holding a field for 1 s, saves the current sound there. Values
+  move only when the fader or a heard scene changes, so edits made in between
+  stay. The chosen A/B scenes are saved in the project (`<scenes xa= xb=>`).
+  At most 24 changes per main-loop pass. Load Scene and Program Change recall
+  at once, as before. Touch hook: the UI loop's touch read (desktop
+  0x0810d3a4, euro 0x0810d564); the definition table grows to 0x296 records.
 - **Eurorack port** (branch `euro`): `tools/retarget.py euro BLUEEURO.BIN`
   builds Cobalt for the bluebox eurorack 1.5.1 (address map, RAM and object
   offsets with evidence in `targets/`).

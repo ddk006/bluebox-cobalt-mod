@@ -27,8 +27,8 @@ def heap_machine(image=patched):
 def definitions(image,size):
  u=heap_machine(image);call(u,0x8134cb8,0)
  return u,bytes(u.mem_read(0xc0010000,size))
-a,old=definitions(stock,0x3934);u,new=definitions(patched,0x484c)
-check(patched[0x08134cce-0x08040000:][:4]==bytes.fromhex('44f64c00') and patched[0x08134ce0-0x08040000:][:4]==bytes.fromhex('44f64e02'),'definition table: allocation (r0) 0x484c = 0x295 records, clear length (r2) 0x484e')
+a,old=definitions(stock,0x3934);u,new=definitions(patched,0x4868)
+check(patched[0x08134cce-0x08040000:][:4]==bytes.fromhex('44f66800') and patched[0x08134ce0-0x08040000:][:4]==bytes.fromhex('44f66a02'),'definition table: allocation (r0) 0x4868 = 0x296 records, clear length (r2) 0x486a')
 cobalt={0x43,0x3a,0x3d,0x4a,0x4b,0x155,*range(0x1a0,0x1ba),0x178}
 check(new[0x178*28:0x179*28]==old[0x178*28:0x178*28+8]+struct.pack('<II',M['symbols']['cue7']['cue_phones_names'],3)+old[0x178*28+16:0x179*28],'Phones Src definition: only the AUTO list and count 3 change')
 check(all(old[i*28:(i+1)*28]==new[i*28:(i+1)*28] for i in range(0x20b) if i not in cobalt),'stock parameter definitions 0..0x20a are preserved')
@@ -37,9 +37,9 @@ check(all(r==(TAG0+i,1) for i,r in enumerate(recs)),'128 PC slot records registe
 check([string(u,u32(u,0xc0010000+(TAG0+i)*28+24)) for i in (0,5,127)]==[b'pcmap0',b'pcmap5',b'pcmap127'],'slot keys pcmap0/pcmap5/pcmap127')
 check(string(u,call(u,0x8136134,TAG0))==b'pcmap0' and string(u,call(u,0x8136134,0x28a))==b'pcmap127','tag->name resolves the first and last slot')
 check(string(u,call(u,0x8136134,0x28b))==b'bankcc' and struct.unpack('<H',new[0x28b*28:0x28b*28+2])[0]==0x28b,'Bank CC setting registered at 0x28b (bankcc)')
-keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'fadecc',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc'}
-check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI tags registered at 0x28b..0x294')
-check(call(u,0x8136134,0x295)==0,'tag->name still refuses ids past the table')
+keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'fadecc',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc',0x295:b'xfopen'}
+check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI tags registered at 0x28b..0x295')
+check(call(u,0x8136134,0x296)==0,'tag->name still refuses ids past the table')
 u.mem_write(0x24010000,b'bankcc\0');check(call(u,0x8136164,0x24010000)==0x28b,'name->tag finds bankcc')
 check(string(u,call(u,0x8136134,0x43))==b'mstdrive','tag->name keeps Cobalt/stock names')
 u.mem_write(0x24010000,b'pcmap5\0');check(call(u,0x8136164,0x24010000)==TAG0+5,'name->tag finds pcmap5 in the extended table')
@@ -455,7 +455,7 @@ def page_rows(cell):
  del rowsl[:];u.mem_write(0x24011800,struct.pack('<H',cell));w32(u,LIST,99);r=call(u,PC['pc_page_rows'],SESSION,0x24011800,LIST);return r,u32(u,LIST),list(rowsl)
 w32(u,field(0),2);w32(u,field(1),3);w32(u,field(2),6)
 del button[:]
-check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x290,0)]),'scene page rows: Scene 2, Save to 3, Bank # 6, Fade CC Off')
+check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x290,0),(0x295,0)]),'scene page rows: Scene 2, Save to 3, Bank # 6, X-Fade CC Off, Crossfader')
 check(button==[('label','Select'),('rect',(226,182,93,38))] and u32(u,EDIT+0x888+0x14)==0x2a0,'scene page: bottom button labelled "Select" at the right (id 0x2a0)')
 call(u,0x8120264,SETTINGS,0x28b,1);call(u,0x8120264,SETTINGS,0x28f,3)
 check(page_rows(0x1b)[2]==[(0x28b,1),(0x28f,3),(0x117,1),(0x292,0),(0x293,1),(0x294,0)],'MIDI page rows: Bank CC, PC Ch, MIDIStopRcv (stock default on), MIDI Out, Map CC Sync (USB), Clock Src')
@@ -473,7 +473,7 @@ check([u32(u,field(i)) for i in range(3)]==[5,16,0] and knobs==[],'scene page ed
 edit(0x1b,0x28f,4)
 check(knobs==[(0x18,0x28f,4)] and saves,'MIDI page edits go to the settings (cell 0x18) and save settings.tml')
 del knobs[:];del saves[:];edit(0x17,0x290,3)
-check(knobs==[(0x18,0x290,3)] and saves,'scene page Fade CC row: a setting (cell 0x18), saved in settings.tml')
+check(knobs==[(0x18,0x290,3)] and saves,'scene page X-Fade CC row: a setting (cell 0x18), saved in settings.tml')
 del knobs[:];edit(3,0x4,-100)
 check(knobs==[(3,0x4,(-100)&0xffffffff)],'other edits pass through to the knob path')
 toolsev=[];stub(u,0x8131210,lambda u:(toolsev.append(1),u.reg_write(UC_ARM_REG_R0,5)))
@@ -648,10 +648,10 @@ w32(u,BROWSER+0x614,1);scroll(10);scroll(1600);page(8)
 check(scroll(10)==([(MID,LONG)],1),'leaving the list puts the start back')
 check(scroll(5000)==([],0),'and nothing more off the list')
 
-# Crossfade by the Fade CC: a recall waits for the fader; continuous values
-# (dB, 0..1000, wide numbers) follow it from where they are; switches, modes
-# and lists change at the far end (127 from the lower half, 0 from the upper).
-fade_knob=stub(u,0x8124b44,knobpath)
+# Crossfader page (Octatrack style): side A = scenes 1-8, side B = 9-16; the
+# fader (X-Fade CC or touch) mixes them. Continuous values in proportion,
+# switches/modes/lists from A below the middle, from B from it.
+xf_knob=stub(u,0x8124b44,knobpath)
 def run_until_idle(fader=0):
  w32(u,STATE+8,fader)
  for _ in range(100):
@@ -660,35 +660,72 @@ def run_until_idle(fader=0):
  w32(u,STATE+8,0)
 def fader(v,ch=0):run_until_idle(0x1000|ch<<8|v)
 sv=lambda a:struct.unpack('<i',struct.pack('<I',a))[0]
-call(u,0x8120264,SETTINGS,0x290,0)
-tset(u,0,0x4,-6000);tset(u,0,0x63,-500);tset(u,0x16,0x85,120);tset(u,0x14,0x1a0,0);save(15)
-tset(u,0,0x4,-1000);tset(u,0,0x63,500);tset(u,0x16,0x85,90);tset(u,0x14,0x1a0,2);save(16)
-act(0,15);run_until_idle()
-check(current(u)==15 and tget(u,0,0x4)==(-6000)&0xffffffff and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'Fade CC Off: scene 15 at once (as before)')
-call(u,0x8120264,SETTINGS,0x290,7)  # Fade CC 7
-mainpass(dt=5);check(u32(u,STATE+12)==7,'the main loop hands the Fade CC number (7) to the IRQ')
-fader(0);act(0,16);run_until_idle();run_until_idle()
-check(sv(tget(u,0,0x4))==-6000 and current(u)==15,'Fade CC set: the recall waits for the fader (nothing moves at 0)')
-fader(127//2+1);lvl=sv(tget(u,0,0x4));pan=sv(tget(u,0,0x63));bpm=tget(u,0x16,0x85)
-print('INFO fader 64: level',lvl,'pan',pan,'BPM',bpm)
-check(abs(lvl-(-3500))<=60,'fader at the middle: track 1 level halfway (-6.0 -> -1.0 dB: %d)'%lvl)
-check(abs(pan)<=20 and abs(bpm-105)<=2,'pan and BPM follow too (pan %d, BPM %d)'%(pan,bpm))
-check(tget(u,0x14,0x1a0)==0 and current(u)==15,'the FX1 mode (a list) waits for the far end; the recall is not done yet')
-fader(32);check(abs(sv(tget(u,0,0x4))-(-4740))<=60,'moving back moves the values back (%d)'%sv(tget(u,0,0x4)))
-fader(40,ch=3);check(abs(sv(tget(u,0,0x4))-(-4425))<=60,'PC Ch All: any channel is taken (%d)'%sv(tget(u,0,0x4)))
+XA,XB,XPOS,XTODO=40,41,42,43
+def lvl():return sv(tget(u,0,0x4))
+tset(u,0,0x4,-6000);tset(u,0,0x63,-500);tset(u,0x16,0x85,120);tset(u,0x14,0x1a0,0);save(3)
+tset(u,0,0x4,-1000);tset(u,0,0x63,500);tset(u,0x16,0x85,90);tset(u,0x14,0x1a0,2);save(12)
+tset(u,0,0x4,-2000);save(5)
+act(0,3);run_until_idle()
+check(u32(u,field(XA))==1 and u32(u,field(XB))==9,'crossfader starts with A = scene 1, B = scene 9')
+call(u,0x8120264,SETTINGS,0x290,7)  # X-Fade CC 7
+mainpass(dt=5);check(u32(u,STATE+12)==7,'the main loop hands the X-Fade CC number (7) to the IRQ')
+# Open the crossfader page from the scene page: row 4 (Select) and the row tap.
+posted=[];stub(u,0x813c384,lambda u:posted.append(struct.unpack('<HHIHHIII',u.mem_read(u.reg_read(UC_ARM_REG_R1),24))))
+act(4)
+check(u32(u,field(4))==2 and posted[-1][0]==0xab and posted[-1][3]==0x17,'Select on the Crossfader row: crossfader page (flag 2), the edit page rebuilt for cell 0x17')
+del button[:]
+check(page_rows(0x17)==(1,0,[]) and button[0]==('label',''),'crossfader page: no rows, no Select button')
+w32(u,APP+0x2b4,EDIT);page(0x19)
+# Touch: stub the driver read with one point (screen y from the top -> native from the bottom).
+pt=[0,0,0]
+def touchread(u):
+ n,x,y=pt;a=u.reg_read(UC_ARM_REG_R1);u.mem_write(a,struct.pack('<HHhh',n,0,x,240-y));u.reg_write(UC_ARM_REG_R0,1)
+stub(u,0x8101c90,touchread)
+PTS=0x24011c00
+def touch(n,x=0,y=0,dt=10):
+ clock[0]+=dt;w32(u,0x3001eb3c,clock[0]);pt[:]=[n,x,y];call(u,PC['pc_touch'],0x24011e00,PTS);return struct.unpack('<H',u.mem_read(PTS,2))[0]
+def tap(x,y,held=50):
+ r=touch(1,x,y);touch(0,dt=held);return r
+def slot(k):return (4+((k-1)&1)*76+30 if k<=8 else 166+((k-9)&1)*76+30, 66+(((k-1)&7)>>1)*42+20)
+check(tap(*slot(3))==0,'a tap on a field belongs to the page: the app sees no touch')
+check(u32(u,field(XA))==3,'tap on scene 3: side A = 3')
+check(tap(*slot(12))==0 and u32(u,field(XB))==12 and lvl()==-6000,'tap on scene 12: side B = 12; the fader is at A, so nothing moves')
+fader(64);a_=lvl();print('INFO fader 64: level',a_,'pan',sv(tget(u,0,0x63)),'BPM',tget(u,0x16,0x85))
+check(abs(a_-(-3480))<=40 and abs(tget(u,0x16,0x85)-105)<=1,'X-Fade CC 64: level and BPM halfway between A (scene 3) and B (scene 12) (%d)'%a_)
+check(tget(u,0x14,0x1a0)==2,'from the middle the FX1 mode (a list) is B\'s')
+fader(63);check(tget(u,0x14,0x1a0)==0,'just below the middle it is A\'s')
+fader(127);check(lvl()==-1000 and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90,'fader at 127: exactly scene 12')
+fader(0);check(lvl()==-6000 and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'and back at 0: exactly scene 3')
+fader(40,ch=3);check(abs(lvl()-(-4425))<=40,'PC Ch All: the X-Fade CC on any channel (%d)'%lvl())
 call(u,0x8120264,SETTINGS,0x28f,1+5)
-fader(100,ch=3);check(abs(sv(tget(u,0,0x4))-(-4425))<=60,'PC Ch 5: the fader on channel 4 is ignored')
-call(u,0x8120264,SETTINGS,0x28f,0)
-fader(127)
-check(current(u)==16 and tget(u,0,0x4)==(-1000)&0xffffffff and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90 and tget(u,0x14,0x1a0)==2,'fader at 127: every value is exactly scene 16')
-act(0,15);run_until_idle()
-check(current(u)==16 and sv(tget(u,0,0x4))==-1000,'next recall from the top: waits again')
-fader(64)
-check(abs(sv(tget(u,0,0x4))-(-3480))<=60,'from 127 it runs towards 0 (fader 64: about halfway, %d)'%sv(tget(u,0,0x4)))
-fader(0)
-check(current(u)==15 and sv(tget(u,0,0x4))==-6000 and tget(u,0x14,0x1a0)==0,'fader at 0: scene 15 complete, FX1 mode switched')
-act(0,16);fader(30);call(u,0x8120264,SETTINGS,0x290,0);run_until_idle()
-check(current(u)==16 and sv(tget(u,0,0x4))==-1000,'Fade CC turned Off during a fade: the recall finishes at once')
-u.hook_del(fade_knob)
+fader(100,ch=3);check(abs(lvl()-(-4425))<=40,'PC Ch 5: the X-Fade CC on channel 4 is ignored')
+call(u,0x8120264,SETTINGS,0x28f,0);fader(0)
+tap(*slot(5));run_until_idle()
+check(u32(u,field(XA))==5 and lvl()==-2000,'a new scene on the side that is heard is heard at once (scene 5)')
+tset(u,0,0x4,-3333)
+tap(*slot(12));run_until_idle()
+check(lvl()==-3333,'picking on the side that is not heard leaves the sound (and the edit) alone')
+u7=used(u)>>6&1
+tap(*slot(7))
+check(u32(u,field(8))>>8==3 and u32(u,field(8))&0xff==7 and u32(u,field(10))==1,'"SCENE 7 SAVED" and a project save requested')
+run_until_idle()
+k7=[j for j,(c,i) in enumerate(items(u)) if (c,i)==(0,0x4)][0]
+check(not u7 and used(u)>>6&1 and sv(val(u,6,k7))==-3333 and u32(u,field(XA))==7 and lvl()==-3333,'a tap on an empty field saves the sound there (scene 7) and picks it')
+tset(u,0,0x4,-4444);tap(*slot(5),held=1200);run_until_idle()
+check(sv(val(u,4,k7))==-4444 and u32(u,field(XA))==5 and lvl()==-4444,'holding a field for 1 s saves over it (scene 5) without moving anything')
+check(touch(1,256,40)==0 and u32(u,field(XPOS))==127,'touching the fader strip at its right end: fader 127, hidden from the app')
+check(touch(1,64+92,40)==0 and u32(u,field(XPOS))==63,'dragging to the middle: 63')
+touch(0);run_until_idle()
+check(abs(lvl()-(-4444+int(3444*63/127)))<=40,'and the sound follows (%d)'%lvl())
+check(touch(1,100,10)==1 and touch(0)==0,'the header (y < 24) still belongs to the app')
+present_xf=lambda:(u.mem_write(FB,bytes(320*240*2)),call(u,PC['pc_present'],0x30001d80,0,0,0),bytes(u.mem_read(FB,320*240*2)))[2]
+img=present_xf()
+acc=sum(1 for o in range(320*66*2,len(img),2) if img[o:o+2]!=b'\0\0')
+check(acc>5000,'crossfader page drawn below the header (%d pixels lit)'%acc)
+w32(u,field(4),1);check(touch(1,*slot(3))==1 and u32(u,field(XA))==5,'scene page (not the crossfader): touches pass to the app');touch(0)
+w32(u,field(4),2);del posted[:];press_a()
+check(u32(u,field(4))==1 and posted[-1][0]==0xab and posted[-1][3]==0x17,'A on the crossfader page: back to the scene page')
+press_a();check(u32(u,field(4))==0,'A again: leaves the scene page')
+call(u,0x8120264,SETTINGS,0x290,0);u.hook_del(xf_knob)
 
 print(H.checks,'scenes checks passed')

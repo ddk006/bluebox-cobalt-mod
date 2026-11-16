@@ -46,7 +46,7 @@ check(bl_target(patched,0x08137496)==cue4['cue_present'] and cue4['pc_present']=
 from capstone import *
 md=Cs(CS_ARCH_ARM,CS_MODE_THUMB|CS_MODE_MCLASS)
 pp=pcm4['pc_present']&~1
-calls=[int(i.op_str[1:],16) for i in md.disasm(bytes(patched[pp-0x08040000:pp-0x08040000+0x200]),pp) if i.mnemonic in ('bl','b.w') and i.op_str.startswith('#')]
+calls=[int(i.op_str[1:],16) for i in md.disasm(bytes(patched[pp-0x08040000:pp-0x08040000+0x400]),pp) if i.mnemonic in ('bl','b.w') and i.op_str.startswith('#')]
 check(s4['cpu_present']&~1 in calls,'which chains to Cobalt\'s compiled M4 display hook (cpu_present)')
 check(len(stock)==len(patched),'firmware length unchanged')
 check(stock[0xa0000:0xc0000]==patched[0xa0000:0xc0000],'storage application unchanged')

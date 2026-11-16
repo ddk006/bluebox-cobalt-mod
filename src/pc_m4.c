@@ -19,6 +19,7 @@ typedef void (*add_fn)(void *,unsigned,int);
 void sat_defs(void *table,unsigned id,unsigned type,const char *label,int min,int max,const char *key);
 static void sc_boot(void);
 static void sc_fader(uint32_t msg);
+static void xf_redraw(uint32_t now);
 #define PC_TAG0 0x20bu
 #define PC_SLOTS 128u
 #define PC_EVT 0x1f0u /* A-menu items 0x1f0 Bank #, 0x1f1 Save Scene, 0x1f2 Scene */
@@ -29,12 +30,13 @@ static void sc_fader(uint32_t msg);
 #define PC_CH 0x28fu /* settings "PC Ch" (key scenech): 0 All, 1 None, 2..17 = MIDI channel 1..16;
                          filters both Bank Select and Program Change */
 #define PC_BANK_CH 0x290u /* s3/s3.1 "Bank Ch": unused since s3.2; now the scene fade (below) */
-#define PC_FADE PC_BANK_CH /* scene crossfade controller: 0 Off, 1..119 = CC number; settings tag "fadecc", a row on the scene page */
+#define PC_FADE PC_BANK_CH /* crossfader controller: 0 Off, 1..119 = CC number; settings tag "fadecc", a row on the scene page */
 #define PC_MIDI_ROW 0x291u /* Tools row "MIDI Settings": a tap, or B with the row selected, opens the MIDI page */
 #define PC_DIN_OUT 0x292u /* m3 MIDI page "DIN Out" (key dinout): 0 Default, 1 USB Thru, 2 All Thru */
 #define PC_CC_SYNC 0x293u /* m8 MIDI page "Map CC Sync" (key ccsync, was m3 dinsync): 0 Off, 1 USB, 2 USB+MIDI Out, 3 MIDI Out */
 #define PC_CLK_SRC 0x294u /* m6 MIDI page "Clock Src" (key clksrc): 0 MIDI In first, 1 USB first */
-#define PC_LAST_TAG 0x294u
+#define PC_XF_ROW 0x295u /* scene page row "Crossfader": a tap, or Select with the row selected, opens the crossfader page */
+#define PC_LAST_TAG 0x295u
 #define PC_CELL_SCENES 0x17u /* edit page (B page) cells of our own */
 #define PC_CELL_MIDI 0x1bu
 #define PC_PAGE_MAIN 8u
@@ -169,7 +171,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     def_enum(table,PC_BANKNUM_ROW,"Bank #:",bank_num,PC_SLOTS+1,"bankassign"); /* 0 shows "None" */
     def_enum(table,PC_CH,"PC Ch:",channels,18,"scenech");
     static const char *const fade[120]={"Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", "110", "111", "112", "113", "114", "115", "116", "117", "118", "119"};
-    def_enum(table,PC_FADE,"Fade CC:",fade,120,"fadecc");
+    def_enum(table,PC_FADE,"X-Fade CC:",fade,120,"fadecc");
+    def_enum(table,PC_XF_ROW,"Crossfader",midi_open,1,"xfopen"); /* one value: turning does nothing */
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -185,7 +188,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     for(unsigned i=0;i<PC_SLOTS;i++)STOCK_ADD(set,PC_TAG0+i,0);
     STOCK_ADD(set,PC_BANK_CC,0);   /* MIDI page */
     STOCK_ADD(set,PC_CH,0);        /* All */
-    STOCK_ADD(set,PC_FADE,0);      /* scene Fade CC: Off */
+    STOCK_ADD(set,PC_FADE,0);      /* crossfader CC: Off */
     STOCK_ADD(set,PC_MIDI_ROW,0);  /* Tools row; a tap opens the MIDI page */
     STOCK_ADD(set,PC_DIN_OUT,0);   /* MIDI page: Default */
     STOCK_ADD(set,PC_CC_SYNC,1);   /* MIDI page: USB */
@@ -371,6 +374,7 @@ void pc_main(void *inputs) {
     pc_quicksave(now);
     pc_autosave(PC_RECORDING || pc_loading() || t->phase || (s->want&PC_MSG));
     pc_band_refresh(now);
+    xf_redraw(now);
     pc_list_scroll(now);
     mo_main(now);
 }
@@ -411,7 +415,7 @@ static uint32_t *sc_field(unsigned which);
 static char *sc_name(void);
 static void sc_clear(void);
 enum {F_SEL_SCENE,F_SEL_SAVE,F_SEL_BANK,F_BANK_HASH,F_PAGE,F_ABTN,F_HELD,F_DONE,F_TOAST,F_TOAST_UNTIL,
-      F_AUTOSAVE,F_BAND,F_REDRAWN,F_SCROLL_KEY,F_SCROLL_AT,F_SCROLL_OFF};
+      F_AUTOSAVE,F_BAND,F_REDRAWN,F_SCROLL_KEY,F_SCROLL_AT,F_SCROLL_OFF,F_XF_DRAW};
 #define PC_TOAST(kind,n) (((kind)<<8)|(n))
 enum {T_RECALL=1,T_EMPTY,T_SAVED,T_NOSLOTS,T_BANK,T_BANK_CLEAR,T_BANK_USED,T_MOUT,T_CLOCK};
 static void pc_toast(unsigned kind,unsigned n) {
@@ -458,6 +462,15 @@ static void pc_open_scenes(void) {
     ((void (*)(void *,unsigned,unsigned,unsigned))0x08122509u)(PC_SESSION,PC_PAGE_PROJSET,0,0);
 }
 static void pc_open_midi(void) {pc_post_ui(0xabu,PC_CELL_MIDI);}
+/* Crossfader page: the scene page's cell with F_PAGE 2 (rows: none; drawn
+ * and touched by xf_draw / pc_touch). */
+static void pc_open_xf(int on) {
+    uint32_t *page=sc_field(F_PAGE);
+    if(!page || !*page)return;
+    *page=on ? 2u : 1u;
+    *sc_field(F_XF_DRAW)=1;
+    pc_post_ui(0xabu,PC_CELL_SCENES);
+}
 /* The edit page's bottom bar (view+0x34) holds one button (view+0x888, id at
  * +0x14) that stock leaves empty, full width. The scene page labels it
  * "Select" at the right, where the browser's Load button sits; a tap posts
@@ -476,13 +489,16 @@ static void pc_select_button(int on) {
 int pc_page_rows(void *session,uint16_t *cell,void *list) {
     typedef void (*append_fn)(void *,unsigned,int);
     append_fn append=(append_fn)0x08138547u;
-    pc_select_button(*cell==PC_CELL_SCENES && sc_bank());
+    int xf=*cell==PC_CELL_SCENES && sc_bank() && *sc_field(F_PAGE)==2u;
+    pc_select_button(*cell==PC_CELL_SCENES && sc_bank() && !xf);
+    if(xf){*(uint32_t *)list=0;return 1;}
     if(*cell==PC_CELL_SCENES && sc_bank()){
         *(uint32_t *)list=0;
         append(list,PC_SCENE_ROW,(int)*sc_field(F_SEL_SCENE));
         append(list,PC_SAVE_ROW,(int)*sc_field(F_SEL_SAVE));
         append(list,PC_BANKNUM_ROW,(int)*sc_field(F_SEL_BANK));
         append(list,PC_FADE,fw_get(PC_SETTINGS,PC_FADE));
+        append(list,PC_XF_ROW,0);
         return 1;
     }
     if(*cell==PC_CELL_MIDI){
@@ -542,8 +558,11 @@ int pc_tools_event(void *view,struct pc_event *e) {
  * MIDI page. Rows: list+0xe8+i*0x330, id at +0x32c; count at list+0x99e8. */
 int pc_list_event(uint8_t *list,struct pc_event *e) {
     int r=((int (*)(void *,void *))0x0813d89du)(list,e);
-    if(e->id==0x145u && e->a<*(uint32_t *)(list+0x99e8u) &&
-       *(uint16_t *)(list+0xe8u+e->a*0x330u+0x32cu)==PC_MIDI_ROW)pc_open_midi();
+    if(e->id==0x145u && e->a<*(uint32_t *)(list+0x99e8u)){
+        unsigned id=*(uint16_t *)(list+0xe8u+e->a*0x330u+0x32cu);
+        if(id==PC_MIDI_ROW)pc_open_midi();
+        else if(id==PC_XF_ROW)pc_open_xf(1);
+    }
     return r;
 }
 /* Select on the scene page: act on the selected row. */
@@ -565,7 +584,7 @@ static void pc_scene_action(void) {
         pc_forget(h);
         if(n){PC_TAG_SET(PC_SETTINGS,PC_TAG0+n-1u,(int)h);pc_toast(T_BANK,n);} else pc_toast(T_BANK_CLEAR,0);
         pc_save();
-    }
+    } else if(row==4)pc_open_xf(1);
 }
 /* Edit page event method (vtable slot 0x0814ca40, stock 0x0813cfb8): the
  * scene page's Select button. */
@@ -584,6 +603,7 @@ void pc_button_a(void *session,unsigned arg) {
     uint32_t *page=sc_field(F_PAGE);
     if(!page)return;
     if(PC_PAGE==PC_PAGE_PROJ)pc_open_scenes();
+    else if(PC_PAGE==PC_PAGE_PROJSET && *page==2u)pc_open_xf(0); /* crossfader -> scene page */
     else if(PC_PAGE==PC_PAGE_PROJSET && *page){
         *page=0;
         ((void (*)(void *,unsigned,unsigned,unsigned))0x08122509u)(PC_SESSION,PC_PAGE_PROJ,0,0);
@@ -746,6 +766,7 @@ static void pc_text_k(struct pc_canvas *c,unsigned x,unsigned y,const char *s,ui
     }
 }
 static void pc_text(struct pc_canvas *c,unsigned x,unsigned y,const char *s,uint32_t rgb) {pc_text_k(c,x,y,s,rgb,1);}
+static void xf_draw(struct pc_canvas *c);
 static char *pc_cat(char *d,const char *s) {while(*s)*d++=*s++;*d=0;return d;}
 static char *pc_num(char *d,unsigned n) {
     char t[4];unsigned i=0;
@@ -797,13 +818,15 @@ static int pc_scene_page_shown(void) {
 void pc_present(void *display,int layer,int a2,int a3) {
     char msg[48];unsigned fill; /* longest: "CLOCK SRC: MIDI IN > USB-B > USB-A" */
     int band=layer==1 && sc_bank() && pc_message(msg,&fill);
-    const char *name=sc_bank() && pc_scene_page_shown() ? sc_name() : 0;
-    if(band || (name && *name)){
+    int xf=sc_bank() && pc_scene_page_shown() && *sc_field(F_PAGE)==2u;
+    const char *name=sc_bank() && pc_scene_page_shown() && !xf ? sc_name() : 0;
+    if(band || xf || (name && *name)){
         const uint8_t *d=((const uint8_t *(*)(void *,int))0x0810139bu)(display,layer);
         if(d){
             struct pc_canvas c={*(uint8_t *const *)d,*(const uint16_t *)(d+4),*(const uint16_t *)(d+6),d[8],*(const uint16_t *)(d+10)};
             if(c.w==320u && c.h==240u && pc_ram((uint32_t)c.px,c.w*c.h*c.bpp) &&
                ((c.fmt==1u && c.bpp==4u) || (c.fmt==2u && c.bpp==3u) || ((c.fmt==3u||c.fmt==4u) && c.bpp==2u))){
+                if(xf)xf_draw(&c);
                 if(name && *name){
                     unsigned n=0;while(name[n])n++;
                     unsigned k=n<=17u ? 2u : 1u;
@@ -921,11 +944,11 @@ struct sc_bank {
     uint32_t mo_clk_usb;
     /* m7: Clock Src value last seen + 1 (0 before the first look), for the band */
     uint32_t mo_clk_seen;
-    /* f2: crossfade by the Fade CC: on (a recall waits for the fader), fader
-     * position at the recall, last position (-1 none yet), values at the recall */
-    uint32_t fade_on;
-    int32_t fade_p0,fade_pos;
-    int32_t from[SC_MAX];
+    /* x1: crossfader: scene on side A (1-8) and B (9-16), fader 0 (A)..127 (B),
+     * items left to morph and the next one, page redraw wanted / last one,
+     * touch (XF_T_*), its slot and start */
+    uint32_t xf_a,xf_b,xf_pos,xf_todo,xf_cursor,xf_draw,xf_drawn;
+    uint32_t xf_touch,xf_slot,xf_down;
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
 #define SC_PTR ((volatile struct sc_ptr *)0x38800fd0u)
@@ -988,7 +1011,8 @@ static void sc_boot(void) {
     b->scroll_key=0;b->scroll_at=0;b->scroll_off=0;
     b->mo_attached=0;b->mo_loading=0;b->mo_pending=0;b->mo_at=0;b->mo_flip=0;b->mo_mark=0;b->mo_count=0;
     b->mo_dumping=0;b->mo_cursor=0;b->mo_busy_since=0;b->mo_din=0;b->mo_to=0;b->mo_clk_src=0;b->mo_clk_at=0;b->mo_clk_usb=0;b->mo_clk_seen=0;
-    b->fade_on=0;b->fade_p0=0;b->fade_pos=-1;
+    b->xf_a=1;b->xf_b=9;b->xf_pos=0;b->xf_todo=0;b->xf_cursor=0;b->xf_draw=0;b->xf_drawn=0;
+    b->xf_touch=0;b->xf_slot=0;b->xf_down=0;
     b->magic=SC_MAGIC;
     p->bank=b;p->magic=SC_MAGIC;
 }
@@ -1016,6 +1040,7 @@ static void sc_clear(void) {
     if(!b)return;
     b->used=0;b->current=0;b->recall=0;b->cursor=0;b->want=0;b->n=0;
     b->sel_scene=1;b->sel_save=1;
+    b->xf_a=1;b->xf_b=9;b->xf_todo=0;
 }
 static unsigned sc_current(void) {struct sc_bank *b=sc_bank();return b ? b->current : 0;}
 static int sc_used(unsigned scene) {struct sc_bank *b=sc_bank();return b && scene>=1u && scene<=SC_SCENES && (b->used>>(scene-1u)&1u);}
@@ -1030,7 +1055,7 @@ static uint32_t *sc_field(unsigned which) {
     struct sc_bank *b=sc_bank();
     if(!b)return 0;
     uint32_t *f[]={&b->sel_scene,&b->sel_save,&b->sel_bank,&b->bank_hash,&b->page,&b->abtn,&b->held_since,&b->hold_done,&b->toast,&b->toast_until,
-                   &b->autosave,&b->band,&b->redrawn,&b->scroll_key,&b->scroll_at,&b->scroll_off};
+                   &b->autosave,&b->band,&b->redrawn,&b->scroll_key,&b->scroll_at,&b->scroll_off,&b->xf_draw};
     return f[which];
 }
 /* Save Scene n: snapshot the template values (a new template when no scene
@@ -1048,26 +1073,7 @@ static void sc_save(unsigned scene) {
 static void sc_recall(unsigned scene) {
     struct sc_bank *b=sc_bank();
     if(!b || scene<1u || scene>SC_SCENES || !(b->used>>(scene-1u)&1u))return;
-    b->recall=scene;b->cursor=0;
-    /* Crossfade (Fade CC set): nothing moves until the fader does. Continuous
-     * values follow it from where they are now; the rest (switches, modes,
-     * lists) change at its far end. */
-    b->fade_on=fw_get(PC_SETTINGS,PC_FADE)!=0;
-    b->fade_p0=b->fade_pos<0 ? 0 : b->fade_pos;
-    if(b->fade_on)for(unsigned j=0;j<b->n;j++)b->from[j]=sc_get(b->item[j].cell,b->item[j].id);
-}
-/* Fade CC value (0..127) from the main loop. */
-static void sc_fader(uint32_t value) {
-    struct sc_bank *b=sc_bank();
-    if(b)b->fade_pos=(int32_t)value;
-}
-/* How far the fader has gone (0..1) from its position at the recall towards
- * the far end: 127 from the lower half, 0 from the upper, so it works back
- * and forth like a DJ crossfader. Moving back lowers it again. */
-static float sc_fade_amount(const struct sc_bank *b) {
-    int p0=b->fade_p0,pos=b->fade_pos<0 ? p0 : b->fade_pos;
-    float a=p0<64 ? (float)(pos-p0)/(float)(127-p0) : (float)(p0-pos)/(float)p0;
-    return a<0.0f ? 0.0f : a>1.0f ? 1.0f : a;
+    b->recall=scene;b->cursor=0;b->xf_todo=0;
 }
 /* Parameter definitions (28 bytes per id: type at +2, min/max at +16/+20):
  * dB (7), 0..1000 (8), pan (9) and plain numbers with a wide range glide. */
@@ -1078,6 +1084,42 @@ static int sc_glides(unsigned id) {
     d+=id*28u;
     int lo=*(const int32_t *)(d+16),hi=*(const int32_t *)(d+20);
     return d[2]==7u || d[2]==8u || d[2]==9u || (d[2]==1u && hi-lo>=24);
+}
+/* Crossfader (Octatrack style): side A holds one of scenes 1-8, side B one of
+ * 9-16, the fader (X-Fade CC or the page) mixes them: dB, 0..1000, pan and
+ * wide numbers in proportion, switches, modes and lists from A below the
+ * middle and from B from it. Values move only when the fader or a scene that
+ * is heard changes, so edits made in between stay until then. */
+static void xf_changed(struct sc_bank *b) {b->xf_todo=b->n;b->xf_cursor=0;b->xf_draw=1;}
+static void xf_set_pos(unsigned pos) {
+    struct sc_bank *b=sc_bank();
+    if(!b || pos>127u)return;
+    if(b->xf_pos!=pos){b->xf_pos=pos;xf_changed(b);}
+}
+static void sc_fader(uint32_t value) {xf_set_pos(value);}
+/* Choose scene n for its side; it is heard unless the fader is fully on the other side. */
+static void xf_pick(unsigned n) {
+    struct sc_bank *b=sc_bank();
+    if(!b || n<1u || n>SC_SCENES)return;
+    uint32_t *side=n<=8u ? &b->xf_a : &b->xf_b;
+    b->xf_draw=1;
+    if(*side==n)return;
+    *side=n;
+    if(n<=8u ? b->xf_pos<127u : b->xf_pos>0u)xf_changed(b);
+}
+static void xf_step(struct sc_bank *b) {
+    if(!b->xf_todo)return;
+    unsigned ka=b->xf_a-1u,kb=b->xf_b-1u,done=0;
+    if(ka>=SC_SCENES || kb>=SC_SCENES || !(b->used>>ka&1u) || !(b->used>>kb&1u) || !b->n){b->xf_todo=0;return;}
+    float a=(float)b->xf_pos/127.0f;
+    while(b->xf_todo && done<SC_BATCH){
+        unsigned j=b->xf_cursor;b->xf_cursor=j+1u<b->n ? j+1u : 0u;b->xf_todo--;
+        uint16_t cell=b->item[j].cell;
+        unsigned id=b->item[j].id;
+        int va=b->value[ka][j],vb=b->value[kb][j];
+        int v=sc_glides(id) ? va+(int)((float)(vb-va)*a) : (b->xf_pos<64u ? va : vb);
+        if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
+    }
 }
 /* Program Change: recall in the main loop, after any bank load in progress. */
 static void sc_request(unsigned program) {
@@ -1092,25 +1134,8 @@ static void sc_main(int busy) {
         b->want=0;
         sc_recall(scene);
     }
-    if(!b->recall)return;
+    if(!b->recall){xf_step(b);return;}
     unsigned k=b->recall-1u,done=0;
-    if(b->fade_on){
-        float a=fw_get(PC_SETTINGS,PC_FADE) ? sc_fade_amount(b) : 1.0f; /* Fade CC turned Off: finish */
-        if(a<1.0f){
-            /* One pass: up to SC_BATCH moves, round robin over the scene. */
-            for(unsigned seen=0;seen<b->n && done<SC_BATCH;seen++){
-                unsigned j=b->cursor;b->cursor=j+1u<b->n ? j+1u : 0u;
-                uint16_t cell=b->item[j].cell;
-                unsigned id=b->item[j].id;
-                if(!sc_glides(id))continue;
-                int from=b->from[j],to=b->value[k][j];
-                int v=from+(int)((float)(to-from)*a);
-                if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
-            }
-            return;
-        }
-        b->fade_on=0;b->cursor=0; /* the far end: every value to the scene */
-    }
     while(b->cursor<b->n && done<SC_BATCH){
         unsigned j=b->cursor++;
         uint16_t cell=b->item[j].cell;
@@ -1119,6 +1144,111 @@ static void sc_main(int busy) {
         if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
     }
     if(b->cursor>=b->n){b->current=b->recall;b->recall=0;mo_request(PC_UI_NOW,50u,MO_TO_USB|MO_TO_DIN);}
+}
+
+/* Crossfader page (320x240, top-left origin): fader strip y 24-63 with
+ * "A n" left and "B n" right of the bar, then scenes 1-8 (side A, left) and
+ * 9-16 (side B, right) as 2 x 4 fields of 74 x 40. A tap picks a scene for
+ * its side; a tap on an empty field, or holding a field for 1 s, saves the
+ * current sound there. Touching the strip moves the fader. */
+#define XF_TOP 24u
+#define XF_GY 66u
+#define XF_BX 64
+#define XF_BW 192
+#define XF_HOLD_MS 1000u
+#define XF_ACCENT 0x9455fau
+enum {XF_T_NONE=1,XF_T_PASS,XF_T_FADER,XF_T_SLOT};
+static unsigned xf_x(unsigned k) {return (k<8u ? 4u : 166u)+(k&1u)*76u;}
+static unsigned xf_y(unsigned k) {return XF_GY+((k&7u)>>1)*42u;}
+static unsigned xf_slot_at(int x,int y) {
+    for(unsigned k=0;k<SC_SCENES;k++){
+        int x0=(int)xf_x(k),y0=(int)xf_y(k);
+        if(x>=x0 && x<x0+74 && y>=y0 && y<y0+40)return k+1u;
+    }
+    return 0;
+}
+/* Rectangle fill: the colour is converted once (pc_pixel's formats), then
+ * stored row by row; clipped to the canvas. */
+static void xf_fill(struct pc_canvas *c,unsigned x,unsigned y,unsigned w,unsigned h,uint32_t rgb) {
+    if(x>=c->w || y>=c->h)return;
+    if(w>c->w-x)w=c->w-x;
+    if(h>c->h-y)h=c->h-y;
+    uint8_t px[4];
+    struct pc_canvas one={px,1,1,c->fmt,c->bpp};
+    pc_pixel(&one,0,0,rgb);
+    for(unsigned j=0;j<h;j++){
+        uint8_t *p=c->px+((y+j)*c->w+x)*c->bpp;
+        if(c->bpp==2u){uint16_t v=*(uint16_t *)px;for(unsigned i=0;i<w;i++)((uint16_t *)p)[i]=v;}
+        else if(c->bpp==4u){uint32_t v=*(uint32_t *)px;for(unsigned i=0;i<w;i++)((uint32_t *)p)[i]=v;}
+        else for(unsigned i=0;i<w;i++){p[3*i]=px[0];p[3*i+1]=px[1];p[3*i+2]=px[2];}
+    }
+}
+__attribute__((noinline)) static void xf_draw(struct pc_canvas *c) {
+    struct sc_bank *b=sc_bank();
+    if(!b)return;
+    xf_fill(c,0,XF_TOP,320,240u-XF_TOP,0);
+    char t[8];
+    pc_num(pc_cat(t,"A"),b->xf_a);
+    pc_text_k(c,6,XF_TOP+12u,t,0xffffffu,2);
+    pc_num(pc_cat(t,"B"),b->xf_b);
+    unsigned n=0;while(t[n])n++;
+    pc_text_k(c,314u-12u*n,XF_TOP+12u,t,0xffffffu,2);
+    xf_fill(c,XF_BX,XF_TOP+18u,XF_BW,4,0x3a3a3au);
+    xf_fill(c,(unsigned)XF_BX+b->xf_pos*(XF_BW-8u)/127u,XF_TOP+10u,8,20,XF_ACCENT);
+    for(unsigned k=0;k<SC_SCENES;k++){
+        unsigned x=xf_x(k),y=xf_y(k),s=k+1u;
+        int sel=s==b->xf_a || s==b->xf_b,used=b->used>>k&1u;
+        if(used || sel)xf_fill(c,x,y,74,40,sel ? XF_ACCENT : 0x3a3a3au);
+        else {xf_fill(c,x,y,74,40,0x3a3a3au);xf_fill(c,x+2u,y+2u,70,36,0x141414u);}
+        pc_num(t,s);
+        unsigned w=s<10u ? 10u : 22u;
+        pc_text_k(c,x+(74u-w)/2u,y+13u,t,used || sel ? 0xffffffu : 0x6a6a6au,2);
+    }
+}
+/* Ask for a screen flip while the page changed (at most every 40 ms). */
+static void xf_redraw(uint32_t now) {
+    struct sc_bank *b=sc_bank();
+    if(!b || !b->xf_draw || now-b->xf_drawn<40u)return;
+    b->xf_draw=0;b->xf_drawn=now;
+    uint32_t app=PC_APP;
+    if(b->page==2u && pc_scene_page_shown() && pc_ram(app,0x150cb0u))*(volatile uint8_t *)(app+0x2b9u)=1;
+}
+static void xf_release(struct sc_bank *b,uint32_t now) {
+    unsigned k=b->xf_slot;
+    if(k<1u || k>SC_SCENES)return;
+    if(!sc_used(k) || now-b->xf_down>=XF_HOLD_MS){
+        sc_save(k);pc_toast(T_SAVED,k);*sc_field(F_AUTOSAVE)=1;
+        *(k<=8u ? &b->xf_a : &b->xf_b)=k; /* the sound is already this scene: nothing moves */
+        b->xf_draw=1;
+    } else xf_pick(k);
+}
+/* UI loop touch read (0x0810d3a4, bl 0x08101c90 -> 1 with fresh points: count
+ * at +0, first point x/y at +4/+6, y from the bottom). On the crossfader page
+ * a touch below the header is ours: the app gets a count of 0 for it. */
+int pc_touch(void *touch,uint8_t *points) {
+    int r=((int (*)(void *,uint8_t *))0x08101c91u)(touch,points);
+    struct sc_bank *b=sc_bank();
+    if(!r || !b)return r;
+    if(b->page!=2u || !pc_scene_page_shown()){b->xf_touch=0;return r;}
+    unsigned n=*(uint16_t *)points;
+    int x=*(int16_t *)(points+4),y=240-*(int16_t *)(points+6);
+    uint32_t now=PC_UI_NOW;
+    if(!n){
+        if(b->xf_touch==XF_T_SLOT)xf_release(b,now);
+        b->xf_touch=0;
+        return r;
+    }
+    if(!b->xf_touch){
+        unsigned k=xf_slot_at(x,y);
+        b->xf_touch=y<(int)XF_TOP ? XF_T_PASS : y<(int)XF_GY ? XF_T_FADER : k ? XF_T_SLOT : XF_T_NONE;
+        b->xf_slot=k;b->xf_down=now;
+    }
+    if(b->xf_touch==XF_T_FADER){
+        int p=(x-XF_BX)*127/(XF_BW-8);
+        xf_set_pos(p<0 ? 0u : p>127 ? 127u : (unsigned)p);
+    }
+    if(b->xf_touch!=XF_T_PASS)*(uint16_t *)points=0;
+    return r;
 }
 
 static void *x_el(void *node) {return node ? (*(void *(**)(void *))*(void **)node)(node) : 0;}
@@ -1137,6 +1267,8 @@ void *sc_write(void *session,void *child,void *doc) {
     void *scenes=x_el(X_INSERT(session,X_NEW(doc,"scenes")));
     if(!scenes)return r;
     x_setint(scenes,"current",(int)b->current);
+    x_setint(scenes,"xa",(int)b->xf_a);
+    x_setint(scenes,"xb",(int)b->xf_b);
     for(unsigned k=0;k<SC_SCENES;k++){
         if(!(b->used>>k&1u))continue;
         void *scene=x_el(X_INSERT(scenes,X_NEW(doc,"scene")));
@@ -1168,6 +1300,7 @@ void sc_read(void *doc) {
     struct sc_bank *b=sc_bank();
     if(b){
         b->recall=0;b->cursor=0;b->used=0;b->current=0;
+        b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_draw=1;
         sc_template(b);
         void *e=X_FIRST(doc,"document");
         if(e)e=X_FIRST(e,"session");
@@ -1194,6 +1327,9 @@ void sc_read(void *doc) {
             }
             b->used|=1u<<k;
         }
+        int xa=0,xb=0;
+        if(scenes && x_getint(scenes,"xa",&xa) && xa>=1 && xa<=8)b->xf_a=(unsigned)xa;
+        if(scenes && x_getint(scenes,"xb",&xb) && xb>=9 && xb<=(int)SC_SCENES)b->xf_b=(unsigned)xb;
         int cur=0;
         if(scenes && x_getint(scenes,"current",&cur) && cur>=1 && cur<=(int)SC_SCENES && (b->used>>(cur-1)&1u))
             b->current=(unsigned)cur;

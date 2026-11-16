@@ -494,6 +494,16 @@
   "method": "code 12/12 insns, 6/6 before",
   "target": "0x08101698"
  },
+ "0x08101c90": {
+  "delta": 40,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101cb8"
+ },
+ "0x08101c91": {
+  "delta": 40,
+  "method": "code 12/12 insns, 6/6 before",
+  "target": "0x08101cb9"
+ },
  "0x0810204e": {
   "delta": 40,
   "method": "code 12/12 insns, 6/6 before",
@@ -813,6 +823,11 @@
   "delta": 448,
   "method": "code 12/12 insns, 6/6 before",
   "target": "0x0810c4d2"
+ },
+ "0x0810d3a4": {
+  "delta": 448,
+  "method": "code 11/12 insns, 6/6 before",
+  "target": "0x0810d564"
  },
  "0x0811085c": {
   "delta": 448,
