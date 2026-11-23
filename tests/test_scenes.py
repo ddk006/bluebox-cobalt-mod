@@ -412,6 +412,7 @@ call(u,0x81078c0,DOC,1,0)
 docel=el(call(u,0x8106c92,DOC,call(u,0x8107b16,DOC,s(b'document'))))
 sess=el(call(u,0x8106c92,docel,call(u,0x8107b16,DOC,s(b'session'))))
 saved1=[val(u,0,j) for j in range(len(items(u)))];saved2=[val(u,1,j) for j in range(len(items(u)))]
+kb=[j for j,(c,i) in enumerate(items(u)) if (c,i)==(0,0x4)][0];w32(u,SB(u)+FIELDS+4*67+4*kb,(-7777)&0xffffffff)  # base (scene 0)
 cv=call(u,0x8107b16,DOC,s(b'cvmap'))
 r=call(u,PC['sc_write'],sess,cv,DOC)
 check(r==cv,'writer hook still inserts <cvmap> and returns it')
@@ -422,11 +423,12 @@ stub(u,0x81079c0,lambda u:freed.append(u.reg_read(UC_ARM_REG_R0)))
 for k in (0,1):
  for j in range(len(saved1)):w32(u,SB(u)+0x20+640*4+(k*640+j)*4,0)
 w32(u,SB(u)+8,0);w32(u,SB(u)+12,0);w32(u,SB(u)+24,0x103)
-call(u,PC['sc_read'],DOC)
+call(u,PC['sc_read'],DOC,count=12000000)  # base + scenes: a project load, not a main-loop pass
 check(freed==[DOC],'reader hook frees the document (stock behaviour)')
 check(used(u)==3 and current(u)==1,'scenes 1-2 and the current scene restored from the project XML')
 check([val(u,0,j) for j in range(len(saved1))]==saved1 and [val(u,1,j) for j in range(len(saved2))]==saved2,'all %d values of both scenes round-trip exactly'%len(saved1))
 check(u32(u,SB(u)+24)==0x103,'a pending scene request survives a project load')
+check(u32(u,SB(u)+FIELDS+4*67+4*kb)==(-7777)&0xffffffff and tget(u,0,0x4)!=-7777&0xffffffff,'the base (the project\'s own state) round-trips as scene 0')
 # A project without <scenes> clears them.
 DOC2=0x24064000;call(u,0x81078c0,DOC2,1,0)
 d2=el(call(u,0x8106c92,DOC2,call(u,0x8107b16,DOC2,s(b'document'))));el(call(u,0x8106c92,d2,call(u,0x8107b16,DOC2,s(b'session'))))
@@ -664,6 +666,7 @@ def run_until_idle(fader=0):
   if not mainpass(dt=0):break
   w32(u,STATE+8,0)
  w32(u,STATE+8,0)
+ for _ in range(12):mainpass(dt=0)  # the live state is compared 64 items per pass
 def fader(v,ch=0):run_until_idle(0x1000|ch<<8|v)
 sv=lambda a:struct.unpack('<i',struct.pack('<I',a))[0]
 XA,XB,XPOS,XTODO=40,41,42,43
@@ -708,6 +711,14 @@ check(tget(u,0x14,0x1a0)==2,'from the middle the FX1 mode (a list) is B\'s')
 fader(63);check(tget(u,0x14,0x1a0)==0,'just below the middle it is A\'s')
 fader(127);check(lvl()==-1000 and tget(u,0,0x63)==500 and tget(u,0x16,0x85)==90,'fader at 127: exactly scene 12')
 fader(0);check(lvl()==-6000 and tget(u,0x16,0x85)==120 and tget(u,0x14,0x1a0)==0,'and back at 0: exactly scene 3')
+tset(u,0,0x11a,100);run_until_idle();fader(127);tset(u,0,0x11a,900);run_until_idle();fader(64)
+check(abs(tget(u,0,0x11a)-504)<=8,'EQ frequency (type 10) glides too: 100 at A, 900 at B, %d in the middle'%tget(u,0,0x11a))
+fader(0)
+for v in range(8,128,8):
+ w32(u,STATE+8,0x1000|v);mainpass(dt=0)
+w32(u,STATE+8,0);mainpass(dt=0)
+check(abs(tget(u,0x16,0x85)-(120-30*120/127))<=1,'a fast move (a new position every pass): BPM, the last item, follows at once (%d)'%tget(u,0x16,0x85))
+fader(0)
 fader(40,ch=3);check(abs(lvl()-(-4425))<=40,'X-Fade Ch All: the X-Fade CC on any channel (%d)'%lvl())
 call(u,0x8120264,SETTINGS,0x296,5)
 fader(100,ch=3);check(abs(lvl()-(-4425))<=40,'X-Fade Ch 5: the X-Fade CC on channel 4 is ignored')
@@ -716,21 +727,31 @@ fader(100,ch=4);check(lvl()!=-4425,'X-Fade Ch 5: channel 5 moves it, whatever PC
 call(u,0x8120264,SETTINGS,0x28f,0);call(u,0x8120264,SETTINGS,0x296,0);fader(0)
 tap(*slot(5));run_until_idle()
 check(u32(u,field(XA))==5 and lvl()==-2000,'a new scene on the side that is heard is heard at once (scene 5)')
-tset(u,0,0x4,-3333)
+k4=[j for j,(c,i) in enumerate(items(u)) if (c,i)==(0,0x4)][0];k7=k4
+BASE=67  # field index of the base values
+def base(j):return sv(u32(u,field(BASE)+4*j))
+tset(u,0,0x4,-3333);run_until_idle()
+check(sv(val(u,4,k4))==-3333,'an edit while scene 5 is heard (fader at A) is kept in scene 5')
 tap(*slot(12));run_until_idle()
 check(lvl()==-3333,'picking on the side that is not heard leaves the sound (and the edit) alone')
-u7=used(u)>>6&1
-tap(*slot(7))
-check(u32(u,field(8))>>8==3 and u32(u,field(8))&0xff==7 and u32(u,field(10))==1,'"SCENE 7 SAVED" and a project save requested')
+fader(127);check(lvl()==-1000,'fader to B: scene 12')
+fader(0);check(lvl()==-3333,'back to A: scene 5 with its edit, nothing turned back')
+bl=base(k4);u7=used(u)>>6&1
+tap(*slot(7));run_until_idle()
+check(not u7 and u32(u,field(XA))==7 and lvl()==bl and not used(u)>>6&1,'a tap on an empty field picks it: it sounds like the project\'s own state (base %d), still empty'%bl)
+tset(u,0,0x4,-2500);run_until_idle()
+check(used(u)>>6&1 and sv(val(u,6,k4))==-2500,'an edit in the empty scene 7 makes it a scene of its own')
+tap(*slot(7),held=1200)
+check(u32(u,field(8))==(12<<8|7) and u32(u,field(10))==1,'holding scene 7 for 1 s: "SCENE 7 CLEARED", project save requested')
 run_until_idle()
-k7=[j for j,(c,i) in enumerate(items(u)) if (c,i)==(0,0x4)][0]
-check(not u7 and used(u)>>6&1 and sv(val(u,6,k7))==-3333 and u32(u,field(XA))==7 and lvl()==-3333,'a tap on an empty field saves the sound there (scene 7) and picks it')
-tset(u,0,0x4,-4444);tap(*slot(5),held=1200);run_until_idle()
-check(sv(val(u,4,k7))==-4444 and u32(u,field(XA))==5 and lvl()==-4444,'holding a field for 1 s saves over it (scene 5) without moving anything')
+check(not used(u)>>6&1 and lvl()==bl,'scene 7 cleared: back to the base')
+tap(*slot(5));run_until_idle();check(u32(u,field(XA))==5 and lvl()==-3333,'scene 5 again')
 check(touch(1,256,FY)==0 and u32(u,field(XPOS))==127,'touching the fader row at its right end: fader 127, hidden from the app')
 check(touch(1,64+92,FY)==0 and u32(u,field(XPOS))==63,'dragging to the middle: 63')
 touch(0);run_until_idle()
-check(abs(lvl()-(-4444+int(3444*63/127)))<=40,'and the sound follows (%d)'%lvl())
+check(abs(lvl()-(-3333+int(2333*63/127)))<=40,'and the sound follows (%d)'%lvl())
+tset(u,0,0x4,-6666);touch(1,64+40,FY);touch(0);run_until_idle()
+check(lvl()!=-6666 and sv(val(u,4,k4))==-3333 and sv(val(u,11,k4))==-1000,'an edit between the ends is not kept: the next fader move replaces it, A and B unchanged')
 check(touch(1,100,10)==1 and touch(0)==0,'the header (y < 24) still belongs to the app')
 present_xf=lambda:(u.mem_write(FB,bytes(320*240*2)),call(u,PC['pc_present'],0x30001d80,0,0,0),bytes(u.mem_read(FB,320*240*2)))[2]
 img=present_xf()
@@ -757,12 +778,18 @@ touch(1,256,FY);touch(0);check(u32(u,field(XPOS))==0,'off: touching the fader ro
 tap(*slot(12));run_until_idle()
 check(lvl()==-1000 and tget(u,0x16,0x85)==90 and current(u)==12 and u32(u,field(XB))==12,'off: a tap on scene 12 recalls it')
 tap(*slot(5));run_until_idle()
-check(lvl()==-4444 and current(u)==5 and u32(u,field(XA))==5,'off: and a tap on scene 5 switches to it')
-tset(u,0,0x4,-1234);tap(*slot(12),held=1200);run_until_idle()
-check(sv(val(u,11,k7))==-1234 and lvl()==-1234,'off: holding a field for 1 s saves the sound there (scene 12)')
+check(lvl()==-3333 and current(u)==5 and u32(u,field(XA))==5,'off: and a tap on scene 5 switches to it')
+tset(u,0,0x4,-1234);run_until_idle()
+check(sv(val(u,4,k4))==-1234,'off: an edit goes into the current scene (5)')
+tap(*slot(12));run_until_idle();check(lvl()==-1000,'off: scene 12 has its own value')
+tap(*slot(5));run_until_idle();check(lvl()==-1234,'off: and scene 5 comes back with the edit')
+tap(*slot(12),held=1200);run_until_idle()
+check(not used(u)>>11&1 and lvl()==-1234,'off: holding scene 12 clears it; scene 5 is heard, nothing moves')
+tap(*slot(12));run_until_idle();check(lvl()==bl,'off: the cleared scene 12 sounds like the base')
+tap(*slot(5));run_until_idle()
 img=present_xf();check(sum(1 for o in range(320*66*2,len(img),2) if img[o:o+2]!=b'\0\0')>5000,'off: page drawn')
 tap(50,36);run_until_idle()
-check(u32(u,field(XOFF))==0 and lvl()==-4444,'FADER on again: the sound follows the fader (at A = scene 5)')
+check(u32(u,field(XOFF))==0 and lvl()==-1234,'FADER on again: the sound follows the fader (at A = scene 5)')
 if CV:
  # X-Fade CV: engine+0x78c0 holds 8 frames of CV 1-6 (centre - reading); the average moves the fader.
  def cvset(i,v):

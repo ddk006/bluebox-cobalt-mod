@@ -451,7 +451,7 @@ static void sc_clear(void);
 enum {F_SEL_SCENE,F_SEL_SAVE,F_SEL_BANK,F_BANK_HASH,F_PAGE,F_ABTN,F_HELD,F_DONE,F_TOAST,F_TOAST_UNTIL,
       F_AUTOSAVE,F_BAND,F_REDRAWN,F_SCROLL_KEY,F_SCROLL_AT,F_SCROLL_OFF,F_XF_DRAW};
 #define PC_TOAST(kind,n) (((kind)<<8)|(n))
-enum {T_RECALL=1,T_EMPTY,T_SAVED,T_NOSLOTS,T_BANK,T_BANK_CLEAR,T_BANK_USED,T_MOUT,T_CLOCK,T_LEARN_CC,T_LEARN_CV};
+enum {T_RECALL=1,T_EMPTY,T_SAVED,T_NOSLOTS,T_BANK,T_BANK_CLEAR,T_BANK_USED,T_MOUT,T_CLOCK,T_LEARN_CC,T_LEARN_CV,T_CLEARED};
 static void pc_toast(unsigned kind,unsigned n) {
     uint32_t *t=sc_field(F_TOAST),*u=sc_field(F_TOAST_UNTIL);
     if(t && u){*t=PC_TOAST(kind,n);*u=PC_UI_NOW+1500u;}
@@ -840,6 +840,7 @@ static int pc_message(char *out,unsigned *fill) {
     case T_CLOCK: d=pc_cat(d,n ? "CLOCK SRC: USB-B > USB-A > MIDI IN" : "CLOCK SRC: MIDI IN > USB-B > USB-A"); break;
     case T_LEARN_CC: d=pc_num(pc_cat(d,"X-FADE CC "),n); break;
     case T_LEARN_CV: d=pc_num(pc_cat(d,"X-FADE CV "),n); break;
+    case T_CLEARED: d=pc_cat(pc_num(pc_cat(d,"SCENE "),n)," CLEARED"); break;
     default: return 0;
     }
     return 1;
@@ -995,6 +996,14 @@ struct sc_bank {
      * the X-Fade CV it came from, CV readings when LEARN started (valid) */
     uint32_t xf_off,xf_learn,xf_cvpos,xf_cvsel,xf_cvsnap_ok;
     int32_t xf_cvsnap[6];
+    /* x3: the project's own state (base, valid when base_ok; an empty scene
+     * sounds like it), items where A and B differ (diff, rebuilt when dirty),
+     * full: the morph walks every item (a scene changed) instead of diff,
+     * live: the fader decides what is heard (else the current scene), scan:
+     * next item compared for the heard scene's live state */
+    uint32_t base_ok,ndiff,diff_dirty,xf_full,xf_live,scan;
+    int32_t base[SC_MAX];
+    uint16_t diff[SC_MAX];
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
 #define SC_PTR ((volatile struct sc_ptr *)0x38800fd0u)
@@ -1060,6 +1069,7 @@ static void sc_boot(void) {
     b->xf_a=1;b->xf_b=9;b->xf_pos=0;b->xf_todo=0;b->xf_cursor=0;b->xf_draw=0;b->xf_drawn=0;
     b->xf_touch=0;b->xf_slot=0;b->xf_down=0;
     b->xf_off=0;b->xf_learn=0;b->xf_cvpos=XF_CV_NONE;b->xf_cvsel=0;b->xf_cvsnap_ok=0;
+    b->base_ok=0;b->ndiff=0;b->diff_dirty=1;b->xf_full=0;b->xf_live=0;b->scan=0;
     b->magic=SC_MAGIC;
     p->bank=b;p->magic=SC_MAGIC;
 }
@@ -1088,6 +1098,7 @@ static void sc_clear(void) {
     b->used=0;b->current=0;b->recall=0;b->cursor=0;b->want=0;b->n=0;
     b->sel_scene=1;b->sel_save=1;
     b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_off=0;
+    b->base_ok=0;b->diff_dirty=1;b->xf_full=0;b->xf_live=0;b->scan=0;
 }
 static unsigned sc_current(void) {struct sc_bank *b=sc_bank();return b ? b->current : 0;}
 static int sc_used(unsigned scene) {struct sc_bank *b=sc_bank();return b && scene>=1u && scene<=SC_SCENES && (b->used>>(scene-1u)&1u);}
@@ -1105,44 +1116,64 @@ static uint32_t *sc_field(unsigned which) {
                    &b->autosave,&b->band,&b->redrawn,&b->scroll_key,&b->scroll_at,&b->scroll_off,&b->xf_draw};
     return f[which];
 }
-/* Save Scene n: snapshot the template values (a new template when no scene
- * exists yet). Scenes live in the project XML: callers request a project save
- * (F_AUTOSAVE) so they reach the SD card. */
+/* Template and base (the project's own state, what an empty scene sounds
+ * like): taken from the live values the first time they are needed after a
+ * load or a new project (or read from the project, see sc_read). */
+static void sc_ready(struct sc_bank *b) {
+    if(!b->n){sc_template(b);b->base_ok=0;}
+    if(!b->base_ok){
+        for(unsigned j=0;j<b->n;j++)b->base[j]=sc_get(b->item[j].cell,b->item[j].id);
+        b->base_ok=1;b->diff_dirty=1;
+    }
+}
+static int32_t sc_val(const struct sc_bank *b,unsigned k,unsigned j) {return b->used>>k&1u ? b->value[k][j] : b->base[j];}
+/* Save Scene n: snapshot the template values. Scenes live in the project XML:
+ * callers request a project save (F_AUTOSAVE) so they reach the SD card. */
 static void sc_save(unsigned scene) {
     struct sc_bank *b=sc_bank();
     if(!b || scene<1u || scene>SC_SCENES)return;
-    if(!b->used || !b->n)sc_template(b);
+    sc_ready(b);
     unsigned k=scene-1u;
     for(unsigned j=0;j<b->n;j++)b->value[k][j]=sc_get(b->item[j].cell,b->item[j].id);
     b->used|=1u<<k;
-    b->current=scene;
+    b->current=scene;b->diff_dirty=1;
 }
+/* Recall: an empty scene recalls the base. From then on the current scene is
+ * heard (not the fader) until the crossfader is used again. */
 static void sc_recall(unsigned scene) {
     struct sc_bank *b=sc_bank();
-    if(!b || scene<1u || scene>SC_SCENES || !(b->used>>(scene-1u)&1u))return;
-    b->recall=scene;b->cursor=0;b->xf_todo=0;
+    if(!b || scene<1u || scene>SC_SCENES)return;
+    sc_ready(b);
+    b->recall=scene;b->cursor=0;b->xf_todo=0;b->xf_full=0;b->xf_live=0;
 }
-/* Parameter definitions (28 bytes per id: type at +2, min/max at +16/+20):
- * dB (7), 0..1000 (8), pan (9) and plain numbers with a wide range glide. */
+/* Parameter definitions (28 bytes per id: type at +2, min/max at +16/+20).
+ * Every number glides (dB 7, 0..1000 8, pan 9, frequency 10, Q 11, times
+ * 14/15/16, ratio 17, plain numbers 1); switches (4), lists (5, 6) and
+ * ranges under 2 steps change at the middle. */
 #define SC_DEFS (*(uint8_t *volatile *)0x3001eb30u)
 static int sc_glides(unsigned id) {
     const uint8_t *d=SC_DEFS;
     if(!pc_ram((uint32_t)d,(id+1u)*28u))return 0;
     d+=id*28u;
     int lo=*(const int32_t *)(d+16),hi=*(const int32_t *)(d+20);
-    return d[2]==7u || d[2]==8u || d[2]==9u || (d[2]==1u && hi-lo>=24);
+    return d[2]!=0u && d[2]!=4u && d[2]!=5u && d[2]!=6u && hi-lo>=2;
 }
 /* Crossfader (Octatrack style): side A holds one of scenes 1-8, side B one of
- * 9-16, the fader (X-Fade CC, X-Fade CV or the page) mixes them: dB, 0..1000,
- * pan and wide numbers in proportion, switches, modes and lists from A below
- * the middle and from B from it. Values move only when the fader or a scene
- * that is heard changes, so edits made in between stay until then. Switched
- * off (FADER on the page), the fader does nothing and a tap recalls a scene. */
-static void xf_changed(struct sc_bank *b) {b->xf_todo=b->n;b->xf_cursor=0;b->xf_draw=1;}
+ * 9-16, the fader (X-Fade CC, X-Fade CV or the page) mixes them: numbers in
+ * proportion, switches and lists from A below the middle and from B from it.
+ * A fader move rewrites only the items where A and B differ (round robin, so
+ * a fast move still reaches all of them); a scene change rewrites every item.
+ * The heard scene keeps the live state (sc_track), so edits stay. Switched off
+ * (FADER on the page), the fader does nothing and a tap recalls a scene. */
+static void xf_changed(struct sc_bank *b,int full) {
+    sc_ready(b);
+    if(full || !b->xf_live){b->xf_full=1;b->xf_cursor=0;}
+    b->xf_live=1;b->xf_todo=b->n;b->xf_draw=1;
+}
 static void xf_set_pos(unsigned pos) {
     struct sc_bank *b=sc_bank();
     if(!b || pos>127u || b->xf_off)return;
-    if(b->xf_pos!=pos){b->xf_pos=pos;xf_changed(b);}
+    if(b->xf_pos!=pos || !b->xf_live){b->xf_pos=pos;xf_changed(b,0);}
 }
 static void sc_fader(uint32_t value) {xf_set_pos(value);}
 /* LEARN on the page: the first CC 1..119 (the IRQ reports it while fade_cc is
@@ -1223,7 +1254,7 @@ static void xf_cv(uint32_t now) {
 /* FADER on the page: off, taps recall scenes; on again, the sound follows the fader. */
 static void xf_off_toggle(struct sc_bank *b) {
     b->xf_off=!b->xf_off;b->xf_draw=1;b->xf_cvpos=XF_CV_NONE;
-    if(!b->xf_off)xf_changed(b);
+    if(!b->xf_off)xf_changed(b,1);
 }
 /* Choose scene n for its side; it is heard unless the fader is fully on the other side. */
 static void xf_pick(unsigned n) {
@@ -1233,20 +1264,67 @@ static void xf_pick(unsigned n) {
     b->xf_draw=1;
     if(*side==n)return;
     *side=n;
-    if(n<=8u ? b->xf_pos<127u : b->xf_pos>0u)xf_changed(b);
+    b->diff_dirty=1;
+    if(n<=8u ? b->xf_pos<127u : b->xf_pos>0u)xf_changed(b,1);
+}
+/* Clear scene n (hold a field): it is empty again, so it sounds like the base. */
+static void xf_clear(struct sc_bank *b,unsigned n) {
+    unsigned k=n-1u;
+    b->used&=~(1u<<k);b->diff_dirty=1;b->xf_draw=1;
+    pc_toast(T_CLEARED,n);*sc_field(F_AUTOSAVE)=1;
+    if(b->xf_off || !b->xf_live){if(b->current==n)sc_recall(n);}
+    else if((n==b->xf_a && b->xf_pos<127u) || (n==b->xf_b && b->xf_pos>0u))xf_changed(b,1);
 }
 static void xf_step(struct sc_bank *b) {
     if(!b->xf_todo)return;
     unsigned ka=b->xf_a-1u,kb=b->xf_b-1u,done=0;
-    if(ka>=SC_SCENES || kb>=SC_SCENES || !(b->used>>ka&1u) || !(b->used>>kb&1u) || !b->n){b->xf_todo=0;return;}
+    if(ka>=SC_SCENES || kb>=SC_SCENES || !b->n || !b->base_ok){b->xf_todo=0;return;}
+    if(b->diff_dirty){
+        unsigned m=0;
+        for(unsigned j=0;j<b->n;j++)if(sc_val(b,ka,j)!=sc_val(b,kb,j))b->diff[m++]=(uint16_t)j;
+        b->ndiff=m;b->diff_dirty=0;
+    }
+    unsigned m=b->xf_full ? b->n : b->ndiff;
+    if(b->xf_todo>m)b->xf_todo=m;
     float a=(float)b->xf_pos/127.0f;
     while(b->xf_todo && done<SC_BATCH){
-        unsigned j=b->xf_cursor;b->xf_cursor=j+1u<b->n ? j+1u : 0u;b->xf_todo--;
+        unsigned c=b->xf_cursor<m ? b->xf_cursor : 0u;b->xf_cursor=c+1u;b->xf_todo--;
+        unsigned j=b->xf_full ? c : b->diff[c];
         uint16_t cell=b->item[j].cell;
         unsigned id=b->item[j].id;
-        int va=b->value[ka][j],vb=b->value[kb][j];
+        int va=sc_val(b,ka,j),vb=sc_val(b,kb,j);
         int v=sc_glides(id) ? va+(int)((float)(vb-va)*a) : (b->xf_pos<64u ? va : vb);
         if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
+    }
+    /* After a full pass, one more over the differing items: the fader may have
+     * moved meanwhile. */
+    if(!b->xf_todo && b->xf_full){b->xf_full=0;b->xf_todo=b->ndiff;b->xf_cursor=0;}
+}
+/* The heard scene: with the crossfader in use, A at the left end and B at the
+ * right end (none in between); else the current (last recalled or saved)
+ * scene. None while values are still being written. */
+static unsigned sc_heard(const struct sc_bank *b) {
+    if(b->recall || b->xf_todo)return 0;
+    if(b->xf_live && !b->xf_off)return b->xf_pos==0u ? b->xf_a : b->xf_pos==127u ? b->xf_b : 0u;
+    return b->current<=SC_SCENES ? b->current : 0u;
+}
+/* Live state: values that differ from the heard scene are stored in it (an
+ * empty scene starts from the base), so an edit stays and comes back with the
+ * scene. SC_TRACK items are compared per pass. */
+#define SC_TRACK 64u
+static void sc_track(struct sc_bank *b) {
+    unsigned h=sc_heard(b);
+    if(!h || !b->n || !b->base_ok)return;
+    unsigned k=h-1u;
+    for(unsigned i=0;i<SC_TRACK && i<b->n;i++){
+        unsigned j=b->scan<b->n ? b->scan : 0u;b->scan=j+1u;
+        int v=sc_get(b->item[j].cell,b->item[j].id);
+        if(v==sc_val(b,k,j))continue;
+        if(!(b->used>>k&1u)){
+            for(unsigned q=0;q<b->n;q++)b->value[k][q]=b->base[q];
+            b->used|=1u<<k;b->xf_draw=1;
+        }
+        b->value[k][j]=v;b->diff_dirty=1;
     }
 }
 /* Program Change: recall in the main loop, after any bank load in progress. */
@@ -1260,15 +1338,15 @@ static void sc_main(int busy) {
     if(b->want&0x100u){
         unsigned scene=(b->want&0x7fu)+1u;
         b->want=0;
-        sc_recall(scene);
+        if(sc_used(scene))sc_recall(scene); /* empty: nothing, as before */
     }
-    if(!b->recall){xf_step(b);return;}
+    if(!b->recall){xf_step(b);sc_track(b);return;}
     unsigned k=b->recall-1u,done=0;
     while(b->cursor<b->n && done<SC_BATCH){
         unsigned j=b->cursor++;
         uint16_t cell=b->item[j].cell;
         unsigned id=b->item[j].id;
-        int v=b->value[k][j];
+        int v=sc_val(b,k,j);
         if(sc_get(cell,id)!=v){SC_KNOB(PC_SESSION,&cell,id,v,0);done++;}
     }
     if(b->cursor>=b->n){b->current=b->recall;b->recall=0;mo_request(PC_UI_NOW,50u,MO_TO_USB|MO_TO_DIN);}
@@ -1375,11 +1453,8 @@ static void xf_redraw(uint32_t now) {
 static void xf_release(struct sc_bank *b,uint32_t now) {
     unsigned k=b->xf_slot;
     if(k<1u || k>SC_SCENES)return;
-    if(!sc_used(k) || now-b->xf_down>=XF_HOLD_MS){
-        sc_save(k);pc_toast(T_SAVED,k);*sc_field(F_AUTOSAVE)=1;
-        *(k<=8u ? &b->xf_a : &b->xf_b)=k; /* the sound is already this scene: nothing moves */
-        b->xf_draw=1;
-    } else if(b->xf_off){
+    if(now-b->xf_down>=XF_HOLD_MS){if(sc_used(k))xf_clear(b,k);}
+    else if(b->xf_off){
         *(k<=8u ? &b->xf_a : &b->xf_b)=k;
         sc_recall(k);pc_toast(T_RECALL,k);b->xf_draw=1;
     } else xf_pick(k);
@@ -1437,15 +1512,17 @@ void *sc_write(void *session,void *child,void *doc) {
     x_setint(scenes,"xa",(int)b->xf_a);
     x_setint(scenes,"xb",(int)b->xf_b);
     if(b->xf_off)x_setint(scenes,"xo",1);
-    for(unsigned k=0;k<SC_SCENES;k++){
-        if(!(b->used>>k&1u))continue;
+    /* scene 0: the base (older readers skip it) */
+    for(int k=b->base_ok ? -1 : 0;k<(int)SC_SCENES;k++){
+        if(k>=0 && !(b->used>>k&1u))continue;
+        const int32_t *v=k<0 ? b->base : b->value[k];
         void *scene=x_el(X_INSERT(scenes,X_NEW(doc,"scene")));
         if(!scene)continue;
-        x_setint(scene,"n",(int)k+1);
+        x_setint(scene,"n",k+1);
         for(unsigned j=0;j<b->n;){
             unsigned cell=b->item[j].cell,m=0;
             while(j<b->n && b->item[j].cell==cell && m<SC_CELL_MAX){
-                b->scratch[m].id=b->item[j].id;b->scratch[m].pad=0;b->scratch[m].value=b->value[k][j];
+                b->scratch[m].id=b->item[j].id;b->scratch[m].pad=0;b->scratch[m].value=v[j];
                 m++;j++;
             }
             void *el=x_el(X_INSERT(scene,X_NEW(doc,"cell")));
@@ -1463,37 +1540,41 @@ __attribute__((naked)) void sc_write_hook(void) {
 }
 /* Project reader 0x08121416: every exit frees the document here. Rebuild the
  * template from the freshly loaded tables, then read <scenes> (values missing
- * from the file keep the project's own values). */
+ * from the file keep the project's own values). Scene 0 is the base; without
+ * it the loaded values are. */
 void sc_read(void *doc) {
     struct sc_bank *b=sc_bank();
     if(b){
         b->recall=0;b->cursor=0;b->used=0;b->current=0;
         b->xf_a=1;b->xf_b=9;b->xf_todo=0;b->xf_draw=1;b->xf_off=0;b->xf_learn=0;b->xf_cvpos=XF_CV_NONE;
+        b->xf_full=0;b->xf_live=0;b->scan=0;b->diff_dirty=1;
         sc_template(b);
+        for(unsigned j=0;j<b->n;j++)b->base[j]=sc_get(b->item[j].cell,b->item[j].id);
+        b->base_ok=1;
         void *e=X_FIRST(doc,"document");
         if(e)e=X_FIRST(e,"session");
         void *scenes=e ? X_FIRST(e,"scenes") : 0;
         for(void *scene=scenes ? X_FIRST(scenes,"scene") : 0;scene;scene=X_NEXT(scene,"scene")){
             int n=0;
-            if(!x_getint(scene,"n",&n) || n<1 || n>(int)SC_SCENES)continue;
-            unsigned k=(unsigned)n-1u;
-            for(unsigned j=0;j<b->n;j++)b->value[k][j]=sc_get(b->item[j].cell,b->item[j].id);
+            if(!x_getint(scene,"n",&n) || n<0 || n>(int)SC_SCENES)continue;
+            int32_t *val=n ? b->value[n-1] : b->base;
+            if(n)for(unsigned j=0;j<b->n;j++)val[j]=b->base[j];
             for(void *el=X_FIRST(scene,"cell");el;el=X_NEXT(el,"cell")){
                 int row=-1;
                 if(!x_getint(el,"row",&row) || !sc_table((unsigned)row))continue;
                 unsigned m=0;
                 for(unsigned j=0;j<b->n && m<SC_CELL_MAX;j++)
                     if(b->item[j].cell==(unsigned)row){
-                        b->scratch[m].id=b->item[j].id;b->scratch[m].pad=0;b->scratch[m].value=b->value[k][j];
+                        b->scratch[m].id=b->item[j].id;b->scratch[m].pad=0;b->scratch[m].value=val[j];
                         b->index[m++]=(uint16_t)j;
                     }
                 if(!m)continue;
                 struct sc_table h;
                 sc_header(&h,(unsigned)row,b->scratch,m);
                 X_TABLE_READ(el,&h);
-                for(unsigned i=0;i<m;i++)b->value[k][b->index[i]]=b->scratch[i].value;
+                for(unsigned i=0;i<m;i++)val[b->index[i]]=b->scratch[i].value;
             }
-            b->used|=1u<<k;
+            if(n)b->used|=1u<<(n-1);
         }
         int xa=0,xb=0;
         if(scenes && x_getint(scenes,"xa",&xa) && xa>=1 && xa<=8)b->xf_a=(unsigned)xa;
