@@ -291,20 +291,29 @@ that differ, without loading anything, so playback and recording carry on.
 - **Crossfader page** (as on the Octatrack): scenes 1–8 on the left are side
   A, 9–16 on the right side B, the fader above them mixes the two. Tap a scene
   to pick it for its side; it is heard at once unless the fader is fully on
-  the other side. Tap an empty field, or hold a field for 1 s, to save the
-  current sound there. Move the fader by touching the fader row, with the
-  X-Fade CC or with the X-Fade CV. A CV moves the fader only while it changes,
-  so touch and CC still work while the CV rests. Levels, knobs, pan and tempo
-  glide between A and B; switches, modes and lists take A's setting below the
-  middle and B's from it. So: fade to B, shape a new sound, save it on the A
-  side, fade back, and so on. A goes back to the scene page.
+  the other side. Move the fader by touching the fader row, with the X-Fade
+  CC or with the X-Fade CV. A CV moves the fader only while it changes, so
+  touch and CC still work while the CV rests. Every number glides between A
+  and B (levels, pan, sends, EQ frequency and Q, times, tempo); switches,
+  modes and lists take A's setting below the middle and B's from it.
+  - **Live scenes:** while you are in a scene (the fader at an end, the
+    scene recalled with the fader off, or by Load Scene / Program Change),
+    every change is kept in that scene and comes back with it. Nothing turns
+    back. Changes made between the ends are only for the fade: the next fader
+    move replaces them.
+  - **Empty scenes** sound like the project as it was loaded (its own state,
+    saved with the project). Change something in an empty scene and it
+    becomes a scene of its own. **Hold a field for 1 s** to clear the scene:
+    it is empty again ("SCENE n CLEARED").
+  - So: fade to B, shape the sound, pick another scene on the A side, fade
+    back, and so on. A goes back to the scene page.
   - **LEARN:** tap it, then move a MIDI controller or a CV source. The first CC
     becomes the X-Fade CC on its channel. On the eurorack, the first CV input
     that moves by about 1 V becomes the X-Fade CV, keeping the 0-5V choice.
     Tap LEARN again to cancel; it also stops by itself after 15 s.
   - **FADER:** switches the crossfader off and on. When it is off, a tap on a
-    scene recalls it straight away, holding a field for 1 s saves, and the
-    fader, CC and CV do nothing. When it is on again, the sound follows the
+    scene recalls it straight away, holding a field for 1 s clears the scene,
+    and the fader, CC and CV do nothing. When it is on again, the sound follows the
     fader. The setting is saved in the project.
 - **Quick save:** hold A for 2 s on MAIN. A band at the top shows progress,
   then saves the next empty scene. A new project starts at scene 1.
@@ -343,6 +352,23 @@ Also in TOOLS > **MIDI Settings**:
   over at once; a lower one only after 300 ms without clock from the current
   one. Start, stop, continue and song position follow the same input. The
   band shows the order when the setting is changed.
+
+### USB audio out (eurorack)
+
+The bluebox eurorack sends the computer 18 channels over USB-C EXT. TOOLS >
+**USB Audio Out** (tap it, or press B with it selected; B goes back) has a row
+per channel, **USB 1** to **USB 18**, each On or Off (all On by default, saved
+in `settings.tml`). Only the channels left On are sent, in their order, and the
+bluebox tells the computer it has that many: USB 1-8 On, the rest Off, gives an
+8-channel device. After a change the computer sees the bluebox unplug and plug
+back in (about a quarter of a second without USB audio); each channel set has
+its own serial number, so the computer does not mix them up. All On, or all
+Off, is the stock 18-channel device.
+
+USB 1-12 come from the 12 track channels, USB 13/14 is the main mix, USB 15-18
+are the other four output buses (from the firmware's packing code; which
+connector each of 15-18 is was not checked). USB audio from the computer
+(**USB Rcv**) and MIDI are unchanged. Code: `targets/euro/usb_m7.c`.
 
 ### Themes
 

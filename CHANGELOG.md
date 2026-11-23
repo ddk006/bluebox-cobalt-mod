@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **USB audio out channels (eurorack):** TOOLS > **USB Audio Out** switches
+  each of the 18 USB channels On or Off (`usbch1`-`usbch18`). Only those On
+  are sent and the device reports that many (UAC2 config descriptor edited in
+  RAM, ring and DataIn for 3 bytes per channel, soft disconnect and reconnect
+  on a change, serial number with the channel mask). Euro-only payload at
+  0x080C8000 (`targets/euro/usb_m7.c`), inserted by the euro build; the M4
+  passes the mask in backup SRAM 0x38800EE0. Settings capacity 176, the
+  definition table 0x2ab records.
+- **Crossfader morph and live scenes:** every number glides, a fader move
+  rewrites only the items where A and B differ (round robin, so fast moves
+  reach all of them); the heard scene keeps the live state; empty scenes sound
+  like the project's own state (saved as `<scene n="0">`); holding a field
+  clears a scene.
 - **Crossfader page (Octatrack style):** a **Crossfader** row on the scene
   page opens it (tap, or Select with the row selected; A goes back). Side A
   holds one of scenes 1–8, side B one of 9–16, shown as two 2 × 4 fields of

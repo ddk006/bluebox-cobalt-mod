@@ -11,6 +11,7 @@
   "M7 phones auto cue code",
   "M4 PC map code",
   "M4 PC map data",
+  "USB Out",
   "Tools mod version label",
   "purple UI palette slot",
   "theme palette slot",
@@ -87,7 +88,7 @@
   "PC map name table size",
   "PC map rename follows name",
   "PC map crossfader page touch",
-  "PC map settings capacity 68 to 144",
+  "PC map settings capacity 68 to 176",
   "PC map settings defaults",
   "PROJ Save assigns the chosen Bank #",
   "PROJ list marks the loaded project",
@@ -150,6 +151,12 @@
     "old": "bytes.fromhex('4ff4c87233212046fff708fd4ff4c87239212046fff702fd78220e212046fff7fdfc4ff47a72cb212046fff7f7fc012235212046fff7f2fc0122ca212046fff7edfc012236212046fff7e8fc002237212046fff7e3fc062234212046fff7defc31e6')",
     "new": "bytes.fromhex('4ff4c87233212046fff70efd4ff4c87239212046fff708fd78220e212046fff703fd4ff47a72cb212046fff7fdfc012235212046fff7f8fc0122ca212046fff7f3fc012236212046fff7eefc002237212046fff7e9fc062234212046fff7e4fc37e6')",
     "why": "FX1 delay defaults block 0x08120bba: same nine stock adds; only the final b to 0x0812088c (desktop 0x08120538) has another distance (the block moved +840, its target +852)"
+   },
+   {
+    "old": "# Target-only patches: none on the desktop (tools/retarget.py inserts them, targets/<target>.json).\n",
+    "new": "# Target-only patches: USB Out (targets/euro/usb_patches.py, euro addresses).\nexec(compile((ROOT/'..'/'..'/'targets'/'euro'/'usb_patches.py').read_text(),'targets/euro/usb_patches.py','exec'))\n",
+    "count": 1,
+    "why": "USB Out channel choice (euro only, see build.sh above); inserted after the address mapping, so its euro addresses stay as they are"
    }
   ],
   "src/delay_m4.h": [
@@ -226,7 +233,21 @@
     "why": "euro: with 3&4 Mode on the fifth send button reads 3&4 (desktop OUT2)"
    }
   ],
+  "build.sh": [
+   {
+    "old": "# Target-only payloads: none on the desktop (tools/retarget.py inserts them, targets/<target>.json).\n",
+    "new": "# Target-only payloads: USB Out (targets/euro/usb_m7.c).\n. ../../targets/euro/usb_build.sh\n",
+    "count": 1,
+    "why": "USB Out channel choice: the eurorack's USB audio (18 channels, UAC2 on the M7) has no desktop counterpart in this form (the desktop config descriptor is 0x123 bytes, the euro one 0x146), so its M7 payload is euro-only, with euro addresses"
+   }
+  ],
   "src/pc_m4.c": [
+   {
+    "old": "#define PC_USB 0 ",
+    "new": "#define PC_USB 1 ",
+    "count": 1,
+    "why": "USB Out page and channel mask for targets/euro/usb_m7.c (eurorack only)"
+   },
    {
     "old": "#define PC_CV 0 ",
     "new": "#define PC_CV 1 ",
@@ -266,6 +287,12 @@
   ],
   "tests/test_scenes.py": [
    {
+    "old": "USB=False  #",
+    "new": "USB=True  #",
+    "count": 1,
+    "why": "Tools row USB Audio Out and the USB page (eurorack only)"
+   },
+   {
     "old": "CV=False  #",
     "new": "CV=True  #",
     "count": 1,
@@ -284,8 +311,8 @@
     "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
    },
    {
-    "old": "len(saved)==7+SLOTS+9",
-    "new": "len(saved)==6+SLOTS+9",
+    "old": "len(saved)==7+SLOTS+28",
+    "new": "len(saved)==6+SLOTS+28",
     "count": 1,
     "why": "the euro settings.tml has six stock tags"
    },
@@ -467,7 +494,7 @@
   {
    "old": "0x119a88",
    "new": "0x1be7e0",
-   "count": 6,
+   "count": 8,
    "why": "Tools page in the app: desktop ldr r0,=0x119a88 before bl 0x0813140c, euro add #0x1be000 + #0x7e0 before bl 0x081324cc (mapped constructor)"
   }
  ],

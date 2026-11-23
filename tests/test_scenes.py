@@ -27,8 +27,8 @@ def heap_machine(image=patched):
 def definitions(image,size):
  u=heap_machine(image);call(u,0x8134cb8,0)
  return u,bytes(u.mem_read(0xc0010000,size))
-a,old=definitions(stock,0x3934);u,new=definitions(patched,0x48a0)
-check(patched[0x08134cce-0x08040000:][:4]==bytes.fromhex('44f6a000') and patched[0x08134ce0-0x08040000:][:4]==bytes.fromhex('44f6a202'),'definition table: allocation (r0) 0x48a0 = 0x298 records, clear length (r2) 0x48a2')
+a,old=definitions(stock,0x3934);u,new=definitions(patched,0x4ab4)
+check(patched[0x08134cce-0x08040000:][:4]==bytes.fromhex('44f6b420') and patched[0x08134ce0-0x08040000:][:4]==bytes.fromhex('44f6b622'),'definition table: allocation (r0) 0x4ab4 = 0x2ab records, clear length (r2) 0x4ab6')
 cobalt={0x43,0x3a,0x3d,0x4a,0x4b,0x155,*range(0x1a0,0x1ba),0x178}
 check(new[0x178*28:0x179*28]==old[0x178*28:0x178*28+8]+struct.pack('<II',M['symbols']['cue7']['cue_phones_names'],3)+old[0x178*28+16:0x179*28],'Phones Src definition: only the AUTO list and count 3 change')
 check(all(old[i*28:(i+1)*28]==new[i*28:(i+1)*28] for i in range(0x20b) if i not in cobalt),'stock parameter definitions 0..0x20a are preserved')
@@ -37,9 +37,9 @@ check(all(r==(TAG0+i,1) for i,r in enumerate(recs)),'128 PC slot records registe
 check([string(u,u32(u,0xc0010000+(TAG0+i)*28+24)) for i in (0,5,127)]==[b'pcmap0',b'pcmap5',b'pcmap127'],'slot keys pcmap0/pcmap5/pcmap127')
 check(string(u,call(u,0x8136134,TAG0))==b'pcmap0' and string(u,call(u,0x8136134,0x28a))==b'pcmap127','tag->name resolves the first and last slot')
 check(string(u,call(u,0x8136134,0x28b))==b'bankcc' and struct.unpack('<H',new[0x28b*28:0x28b*28+2])[0]==0x28b,'Bank CC setting registered at 0x28b (bankcc)')
-keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'fadecc',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc',0x295:b'xfopen',0x296:b'xfch',0x297:b'xfcv'}
-check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI tags registered at 0x28b..0x297')
-check(call(u,0x8136134,0x298)==0,'tag->name still refuses ids past the table')
+keys={0x28b:b'bankcc',0x28c:b'scenesel',0x28d:b'scenesave',0x28e:b'bankassign',0x28f:b'scenech',0x290:b'fadecc',0x291:b'midimenu',0x292:b'dinout',0x293:b'ccsync',0x294:b'clksrc',0x295:b'xfopen',0x296:b'xfch',0x297:b'xfcv',0x298:b'usbmenu',0x299:b'usbch1',0x2a2:b'usbch10',0x2aa:b'usbch18'}
+check(all(string(u,call(u,0x8136134,i))==k for i,k in keys.items()),'scene/MIDI/USB tags registered at 0x28b..0x2aa')
+check(call(u,0x8136134,0x2ab)==0,'tag->name still refuses ids past the table')
 u.mem_write(0x24010000,b'bankcc\0');check(call(u,0x8136164,0x24010000)==0x28b,'name->tag finds bankcc')
 check(string(u,call(u,0x8136134,0x43))==b'mstdrive','tag->name keeps Cobalt/stock names')
 u.mem_write(0x24010000,b'pcmap5\0');check(call(u,0x8136164,0x24010000)==TAG0+5,'name->tag finds pcmap5 in the extended table')
@@ -53,9 +53,9 @@ def defaults(image):
  n,cap=struct.unpack('<HH',u.mem_read(SETTINGS+10,4))
  return u,[struct.unpack('<H2xi',u.mem_read(u32(u,SETTINGS+4)+8*i,8)) for i in range(n)],cap
 _,sold,scap=defaults(stock);u,snew,cap=defaults(patched)
-check(scap==0x44 and cap==0x90,'settings capacity 68 -> 144')
+check(scap==0x44 and cap==0xb0,'settings capacity 68 -> 176')
 check(snew[:7]==sold and len(sold)==7,'stock settings defaults unchanged and first')
-check(snew[7:]==[(TAG0+i,0) for i in range(SLOTS)]+[(0x28b,0),(0x28f,0),(0x290,0),(0x291,0),(0x292,0),(0x293,1),(0x294,0),(0x296,0),(0x297,0)] and len(snew)<=cap,'Bank # slots, Bank CC (MSB), Scene/Bank channels (All), the MIDI row, MIDI Out (Default), Map CC Sync (USB), Clock Src (MIDI In), X-Fade Ch (All) and X-Fade CV (Off) appended within capacity')
+check(snew[7:]==[(TAG0+i,0) for i in range(SLOTS)]+[(0x28b,0),(0x28f,0),(0x290,0),(0x291,0),(0x292,0),(0x293,1),(0x294,0),(0x296,0),(0x297,0),(0x298,0)]+[(0x299+i,1) for i in range(18)] and len(snew)<=cap,'Bank # slots, Bank CC (MSB), Scene/Bank channels (All), the MIDI row, MIDI Out (Default), Map CC Sync (USB), Clock Src (MIDI In), X-Fade Ch (All), X-Fade CV (Off), the USB row and 18 USB channels (On) appended within capacity')
 
 # settings.tml writer/reader loops with the XML object boundary stubbed.
 u=heap_machine();call(u,0x8134cb8,0);call(u,0x8120a52,SETTINGS)
@@ -68,7 +68,7 @@ stub(u,0x81074dc,key);stub(u,0x8106dc6,lambda u:saved.update({last[0]:u.reg_read
 call(u,0x8120264,SETTINGS,TAG0+4,0xdeadbeef);call(u,0x8120264,SETTINGS,TAG0+127,0x1234)
 call(u,0x8137698,0x24010000,0,0,SETTINGS,end=0x813774e)
 check(saved.get('pcmap4')==0xdeadbeef and saved.get('pcmap127')==0x1234 and saved.get('pcmap0')==0,'settings writer emits every PC slot attribute')
-check(len([k for k in saved if k.startswith('pcmap')])==SLOTS and len(saved)==7+SLOTS+9 and saved.get('bankcc')==0 and saved.get('scenech')==0 and saved.get('midimenu')==0 and saved.get('dinout')==0 and saved.get('ccsync')==1 and saved.get('clksrc')==0 and saved.get('xfch')==0 and saved.get('xfcv')==0,'writer emits 7 stock + 128 slot + 9 MIDI/crossfader attributes')
+check(len([k for k in saved if k.startswith('pcmap')])==SLOTS and len(saved)==7+SLOTS+28 and saved.get('usbmenu')==0 and saved.get('usbch1')==1 and saved.get('usbch18')==1 and saved.get('bankcc')==0 and saved.get('scenech')==0 and saved.get('midimenu')==0 and saved.get('dinout')==0 and saved.get('ccsync')==1 and saved.get('clksrc')==0 and saved.get('xfch')==0 and saved.get('xfcv')==0,'writer emits 7 stock + 128 slot + 9 MIDI/crossfader + 19 USB attributes')
 stub(u,0x8137be8,lambda u:u.reg_write(UC_ARM_REG_R0,1))
 def find(u):last[0]=string(u,u.reg_read(UC_ARM_REG_R1)).decode();u.reg_write(UC_ARM_REG_R0,XML if last[0] in saved else 0)
 stub(u,0x810747c,find)
@@ -250,8 +250,9 @@ check(after(0x10a)[0]==2 and after(0x11e)[0]==2,'keyboard/keypad overlay pages f
 
 # Tools panel: PC slots never become rows.
 rows=[];stub(u,0x8138546,lambda u:rows.append(u.reg_read(UC_ARM_REG_R1)))
-for tag in (0x80,0x81,0x117,TAG0,TAG0+127,0x28b,0x28f,0x290,0x291,0x292,0x293,0x294,0x204):call(u,PC['pc_tools_append'],0x24070000,tag,0)
-check(rows==[0x80,0x81,0x291,0x204],'Tools rows: Bank # slots, MIDI settings and MIDIStopRcv hidden; the MIDI row shown')
+USB=False  # USB Out page (the eurorack build, targets/euro.json)
+for tag in (0x80,0x81,0x117,TAG0,TAG0+127,0x28b,0x28f,0x290,0x291,0x292,0x293,0x294,0x298,0x299,0x2aa,0x204):call(u,PC['pc_tools_append'],0x24070000,tag,0)
+check(rows==[0x80,0x81,0x291]+([0x298] if USB else [])+[0x204],'Tools rows: Bank # slots, MIDI and USB settings and MIDIStopRcv hidden; the MIDI row (and on the eurorack the USB row) shown')
 
 
 # ---------------------------------------------------------------- Scenes
@@ -465,6 +466,7 @@ check(page_rows(0x17)==(1,0,[(0x28c,2),(0x28d,3),(0x28e,6),(0x295,0),(0x290,0),(
 check(button==[('label','Select'),('rect',(226,182,93,38))] and u32(u,EDIT+0x888+0x14)==0x2a0,'scene page: bottom button labelled "Select" at the right (id 0x2a0)')
 call(u,0x8120264,SETTINGS,0x28b,1);call(u,0x8120264,SETTINGS,0x28f,3)
 check(page_rows(0x1b)[2]==[(0x28b,1),(0x28f,3),(0x117,1),(0x292,0),(0x293,1),(0x294,0)],'MIDI page rows: Bank CC, PC Ch, MIDIStopRcv (stock default on), MIDI Out, Map CC Sync (USB), Clock Src')
+check(page_rows(0x1c)[2]==[(0x299+i,1) for i in range(18)],'USB page rows: USB 1-18, all On')
 call(u,0x8120264,SETTINGS,0x28b,0);call(u,0x8120264,SETTINGS,0x28f,0)
 built=[];stub(u,0x8121cf4,lambda u:(built.append(struct.unpack('<H',u.mem_read(u.reg_read(UC_ARM_REG_R1),2))[0]),u.reg_write(UC_ARM_REG_R0,7)))
 del button[:]
@@ -482,12 +484,15 @@ del knobs[:];del saves[:];edit(0x17,0x290,3)
 check(knobs==[(0x18,0x290,3)] and saves,'scene page X-Fade CC row: a setting (cell 0x18), saved in settings.tml')
 del knobs[:];del saves[:];edit(0x17,0x296,5);edit(0x17,0x297,8)
 check(knobs==[(0x18,0x296,5),(0x18,0x297,8)] and len(saves)==2,'X-Fade Ch and X-Fade CV rows: settings too')
+del knobs[:];del saves[:];edit(0x1c,0x29a,0)
+check(knobs==[(0x18,0x29a,0)] and saves,'USB page edits: settings (cell 0x18), saved in settings.tml')
 del knobs[:];edit(3,0x4,-100)
 check(knobs==[(3,0x4,(-100)&0xffffffff)],'other edits pass through to the knob path')
 toolsev=[];stub(u,0x8131210,lambda u:(toolsev.append(1),u.reg_write(UC_ARM_REG_R0,5)))
 def tools(ev,id):u.mem_write(0x24011000,struct.pack('<HHIHHIII',ev,0,0x8148664,0,0,1,id,0));return call(u,PC['pc_tools_event'],0x24030000,0x24011000)
 del posted[:]
 check(tools(0x3d,0x291)==0 and not posted and not toolsev,'turning the Tools "MIDI:" row does nothing (no value, no page)')
+check(tools(0x3c,0x298)==0 and not posted and not toolsev,'turning the USB Audio Out row does nothing either')
 # A tap on a row: list widget event 0x145 with the row index.
 LW=0xc1100000;taps=[]
 stub(u,0x813d89c,lambda u:(taps.append(u.reg_read(UC_ARM_REG_R0)),u.reg_write(UC_ARM_REG_R0,0)))
@@ -498,6 +503,9 @@ del posted[:]
 check(tap(0x145,2)==0 and taps==[LW] and posted and posted[-1][0]==0xab and posted[-1][3]==0x1b,'tapping the MIDI row: stock selection, then the MIDI page (cell 0x1b) opens')
 del posted[:]
 check(tap(0x145,0)==0 and not posted,'tapping another row (Brightness) only selects it')
+u.mem_write(LW+0xe8+1*0x330+0x32c,struct.pack('<H',0x298));del posted[:]
+check(tap(0x145,1)==0 and (posted[-1][3]==0x1c if USB else not posted),'tapping the USB Audio Out row: the USB page (cell 0x1c) on the eurorack')
+u.mem_write(LW+0xe8+1*0x330+0x32c,struct.pack('<H',0x81));del posted[:]
 check(tap(0x145,5)==0 and not posted and tap(0x144,2)==0 and not posted,'out-of-range rows and other list events: stock only')
 check(tools(0x3c,0x80)==5 and toolsev,'other Tools rows behave as stock')
 # Bank # row: assign the number to the project selected in PROJ.
@@ -560,6 +568,16 @@ w32(u,APP+0x2b4,EDIT);u.mem_write(EDIT+0xa3e0,struct.pack('<H',0x1b));p=press_b(
 check(len(bcalls)==3 and p and p[-1][0]==0xcb,'B on the MIDI page: back to Tools (UI event 0xcb)')
 u.mem_write(EDIT+0xa3e0,struct.pack('<H',0x16))
 check(press_b()==[] and len(bcalls)==4,'B on other edit pages: stock only')
+if USB:
+ u.mem_write(EDIT+0xa3e0,struct.pack('<H',0x1c));p=press_b()
+ check(p and p[-1][0]==0xcb,'B on the USB page: back to Tools')
+ w32(u,APP+0x2b4,APP+0x119a88);u.mem_write(TL+0xe8+1*0x330+0x32c,struct.pack('<H',0x298));w32(u,TL+0x99ec,1);p=press_b()
+ check(p and p[-1][0]==0xab and p[-1][3]==0x1c,'B on Tools with "USB Audio Out" selected: the USB page opens')
+ u.mem_write(TL+0xe8+1*0x330+0x32c,struct.pack('<H',0x81));w32(u,APP+0x2b4,EDIT)
+ call(u,0x8120264,SETTINGS,0x29a,0);mainpass(dt=5)
+ check(u32(u,0x38800ee0)==0x55534231 and u32(u,0x38800ee4)==0x3ffff&~2,'USB 2 Off: the M7 gets the mask 0x3fffd (0x38800ee0)')
+ call(u,0x8120264,SETTINGS,0x29a,1);mainpass(dt=5)
+ u.mem_write(EDIT+0xa3e0,struct.pack('<H',0x16))
 # PROJ list: the loaded project's row gets "* ".
 LB=0x24013000
 def row(i):u.mem_write(LB,bytes(64));r=call(u,PC['pc_list_row'],0x300172fc,i,LB);return r,string(u,LB)

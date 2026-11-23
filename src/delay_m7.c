@@ -84,10 +84,10 @@ struct dly_shared {
     float p_ratio, p_ratio2;     /* 2^(semitones/12), and squared for PING's line C; 1 = off */
     float p_ph[6];               /* per line: samples since its last jump */
 };
-#define DS ((struct dly_shared *)0x38800d00u)   /* reserved below the CPU meter at 0xf00 */
+#define DS ((struct dly_shared *)0x38800d00u)   /* below the USB Out lines at 0xec0 (euro) */
 #define DS_MAGIC 0x44454c35u
 
-_Static_assert(0xd00 + sizeof(struct dly_shared) <= 0xf00, "delay state below the CPU meter");
+_Static_assert(0xd00 + sizeof(struct dly_shared) <= 0xec0, "delay state below the USB Out lines (0xec0, 0xee0) and the CPU meter");
 
 static struct dly_shared *dly_state(void)
 {

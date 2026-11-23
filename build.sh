@@ -59,4 +59,5 @@ done
 "$OBJCOPY" -O binary -j .cave build/cue4.elf build/cue4.bin
 "$NM" build/cue4.elf > build/cue4.symbols
 rm -f build/gr7_main.o build/gr7_fast.o build/delay7_main.o build/delay7_fast.o
+# Target-only payloads: none on the desktop (tools/retarget.py inserts them, targets/<target>.json).
 python3 tools/make_release.py "$@"

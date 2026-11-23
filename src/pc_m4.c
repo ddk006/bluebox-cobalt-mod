@@ -41,10 +41,22 @@ static void xf_cv(uint32_t now);
 #define PC_XF_ROW 0x295u /* scene page row "Crossfader": a tap, or Select with the row selected, opens the crossfader page */
 #define PC_XF_CH 0x296u /* scene page "X-Fade Ch" (key xfch): 0 All, 1..16 = channel of the X-Fade CC; LEARN sets it */
 #define PC_XF_CV 0x297u /* scene page "X-Fade CV" (key xfcv): 0 Off, 1..6 = CV n for -5..+5 V, 7..12 = CV n-6 for 0..+5 V */
-#define PC_LAST_TAG 0x297u
+#define PC_USB_ROW 0x298u /* Tools row "USB Audio Out": a tap, or B with the row selected, opens the USB page */
+#define PC_USB_CH 0x299u /* USB page "USB 1:".."USB 18:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
+#define PC_USB_N 18u
+#define PC_LAST_TAG 0x2aau
 #define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
+#define PC_USB 0 /* USB audio channel choice (eurorack, targets/euro/usb_m7.c): targets/euro.json sets 1 */
+/* USB channels to send (bit n = USB n+1), written by the M4 for the M7: a
+ * cache line of its own (the M7 caches backup SRAM and invalidates it before
+ * reading). */
+struct pc_usb {uint32_t magic,mask,spare[6];};
+#define PC_USB_OUT ((volatile struct pc_usb *)0x38800ee0u)
+#define PC_USB_MAGIC 0x55534231u
+_Static_assert(sizeof(struct pc_usb)==32,"USB channel mask fills the 0xee0 cache line");
 #define PC_CELL_SCENES 0x17u /* edit page (B page) cells of our own */
 #define PC_CELL_MIDI 0x1bu
+#define PC_CELL_USB 0x1cu
 #define PC_PAGE_MAIN 8u
 #define PC_PAGE_PROJ 0x18u
 #define PC_PAGE_PROJSET 0x19u /* B on PROJ: edit page for cell 0x16 */
@@ -187,6 +199,13 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     static const char *const xf_cv[13]={"Off","CV1 +-5V","CV2 +-5V","CV3 +-5V","CV4 +-5V","CV5 +-5V","CV6 +-5V",
                                        "CV1 0-5V","CV2 0-5V","CV3 0-5V","CV4 0-5V","CV5 0-5V","CV6 0-5V"};
     def_enum(table,PC_XF_CV,"X-Fade CV:",xf_cv,13,"xfcv");
+    def_enum(table,PC_USB_ROW,"USB Audio Out",midi_open,1,"usbmenu"); /* one value: turning does nothing */
+    static const char *const on_off[2]={"Off","On"};
+    static const char *const usb_label[PC_USB_N]={"USB 1:","USB 2:","USB 3:","USB 4:","USB 5:","USB 6:","USB 7:","USB 8:","USB 9:",
+        "USB 10:","USB 11:","USB 12:","USB 13:","USB 14:","USB 15:","USB 16:","USB 17:","USB 18:"};
+    static const char *const usb_key[PC_USB_N]={"usbch1","usbch2","usbch3","usbch4","usbch5","usbch6","usbch7","usbch8","usbch9",
+        "usbch10","usbch11","usbch12","usbch13","usbch14","usbch15","usbch16","usbch17","usbch18"};
+    for(unsigned i=0;i<PC_USB_N;i++)def_enum(table,PC_USB_CH+i,usb_label[i],on_off,2,usb_key[i]);
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -209,6 +228,8 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     STOCK_ADD(set,PC_CLK_SRC,0);   /* MIDI page: MIDI In first */
     STOCK_ADD(set,PC_XF_CH,0);     /* X-Fade CC on any channel */
     STOCK_ADD(set,PC_XF_CV,0);     /* X-Fade CV: Off */
+    STOCK_ADD(set,PC_USB_ROW,0);   /* Tools row; a tap opens the USB page */
+    for(unsigned i=0;i<PC_USB_N;i++)STOCK_ADD(set,PC_USB_CH+i,1); /* every USB channel on (stock) */
 }
 
 /* MIDI poll (TIM4 IRQ) at 0x0810341a: r0=status, r4=message (data1 at +1).
@@ -387,6 +408,12 @@ void pc_main(void *inputs) {
     if(fade&PC_LEARNED)xf_learned_cc(fade);
     else if((fade&PC_MSG) && (fade_ch==0u || ((fade>>8)&0xfu)==fade_ch-1u))sc_fader(fade&0x7fu);
     xf_cv(now);
+    if(PC_USB){
+        uint32_t mask=0;
+        for(unsigned i=0;i<PC_USB_N;i++)if(fw_get(PC_SETTINGS,PC_USB_CH+i))mask|=1u<<i;
+        volatile struct pc_usb *u=PC_USB_OUT;
+        u->mask=mask;u->magic=PC_USB_MAGIC;
+    }
     if(s->want&PC_MSG){
         if(busy)s->want=0;
         else if(now-s->since>=PC_SETTLE_MS){
@@ -422,7 +449,7 @@ void pc_after_load(void *session,unsigned page,unsigned a,unsigned b) {
 }
 /* Tools (settings) panel lists every settings tag (0x08121e82): keep the PC slots out. */
 void pc_tools_append(void *list,unsigned id,int value) {
-    if(id>=PC_TAG0 && id<=PC_LAST_TAG && id!=PC_MIDI_ROW)return; /* Bank # slots and the MIDI page settings */
+    if(id>=PC_TAG0 && id<=PC_LAST_TAG && id!=PC_MIDI_ROW && !(PC_USB && id==PC_USB_ROW))return; /* Bank # slots, MIDI and USB page settings */
     if(id==0x117u)return; /* MIDIStopRcv: moved to the MIDI page */
     ((void (*)(void *,unsigned,int))0x08138547u)(list,id,value);
 }
@@ -496,6 +523,7 @@ static void pc_open_scenes(void) {
     ((void (*)(void *,unsigned,unsigned,unsigned))0x08122509u)(PC_SESSION,PC_PAGE_PROJSET,0,0);
 }
 static void pc_open_midi(void) {pc_post_ui(0xabu,PC_CELL_MIDI);}
+static void pc_open_usb(void) {pc_post_ui(0xabu,PC_CELL_USB);}
 /* Crossfader page: the scene page's cell with F_PAGE 2 (rows: none; drawn
  * and touched by xf_draw / pc_touch). */
 static void pc_open_xf(int on) {
@@ -543,6 +571,11 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
         for(unsigned i=0;i<sizeof ids/sizeof ids[0];i++)append(list,ids[i],fw_get(PC_SETTINGS,ids[i]));
         return 1;
     }
+    if(*cell==PC_CELL_USB){
+        *(uint32_t *)list=0;
+        for(unsigned i=0;i<PC_USB_N;i++)append(list,PC_USB_CH+i,fw_get(PC_SETTINGS,PC_USB_CH+i));
+        return 1;
+    }
     return ((int (*)(void *,uint16_t *,void *))0x08121cf5u)(session,cell,list);
 }
 /* Bank # n (1-128) already belongs to a project other than h. */
@@ -574,7 +607,7 @@ void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
         }
         return;
     }
-    if(*cell==PC_CELL_MIDI){
+    if(*cell==PC_CELL_MIDI || *cell==PC_CELL_USB){
         uint16_t settings=0x18;
         knob(session,&settings,id,value,extra);
         pc_save();
@@ -585,7 +618,7 @@ void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
 /* Tools view event method (vtable 0x0814ba3c, stock 0x08131210): the "MIDI:"
  * row has no value to change; swallow its edits (0x3c/0x3d, id at +0x10). */
 int pc_tools_event(void *view,struct pc_event *e) {
-    if((e->id==0x3cu || e->id==0x3du) && e->b==PC_MIDI_ROW)return 0;
+    if((e->id==0x3cu || e->id==0x3du) && (e->b==PC_MIDI_ROW || e->b==PC_USB_ROW))return 0;
     return ((int (*)(void *,void *))0x08131211u)(view,e);
 }
 /* List widget event method (vtable slot 0x0814cac4, stock 0x0813d89c, shared by
@@ -597,6 +630,7 @@ int pc_list_event(uint8_t *list,struct pc_event *e) {
     if(e->id==0x145u && e->a<*(uint32_t *)(list+0x99e8u)){
         unsigned id=*(uint16_t *)(list+0xe8u+e->a*0x330u+0x32cu);
         if(id==PC_MIDI_ROW)pc_open_midi();
+        else if(PC_USB && id==PC_USB_ROW)pc_open_usb();
         else if(id==PC_XF_ROW)pc_open_xf(1);
     }
     return r;
@@ -650,8 +684,9 @@ void pc_button_a(void *session,unsigned arg) {
 /* B-button default path 0x081239e0 (bl 0x08123818, r1=0). The root view
  * (app+0x280) keeps the shown view at +0x34; Tools is app+0x119a88 (its row
  * list at +0x590), the edit page app+0x1e978 (cell at +0xa3e0).
- * - Tools with the "MIDI Settings" row selected: open the MIDI page.
- * - MIDI page: back to Tools (UI event 0xcb shows the Tools view). */
+ * - Tools with the "MIDI Settings" ("USB Audio Out") row selected: open the
+ *   MIDI (USB) page.
+ * - MIDI or USB page: back to Tools (UI event 0xcb shows the Tools view). */
 void pc_button_b(void *session,unsigned arg) {
     uint32_t app=PC_APP;
     unsigned go=0;
@@ -659,12 +694,15 @@ void pc_button_b(void *session,unsigned arg) {
         uint32_t shown=*(uint32_t *)(app+0x2b4u);
         uint8_t *list=(uint8_t *)(app+0x119a88u+0x590u);
         uint32_t sel=*(uint32_t *)(list+0x99ecu);
-        if(shown==app+0x119a88u && sel<*(uint32_t *)(list+0x99e8u) &&
-           *(uint16_t *)(list+0xe8u+sel*0x330u+0x32cu)==PC_MIDI_ROW)go=1;
-        else if(shown==app+0x1e978u && *(uint16_t *)(app+0x1e978u+0xa3e0u)==PC_CELL_MIDI)go=2;
+        unsigned row=sel<*(uint32_t *)(list+0x99e8u) ? *(uint16_t *)(list+0xe8u+sel*0x330u+0x32cu) : 0u;
+        unsigned cell=*(uint16_t *)(app+0x1e978u+0xa3e0u);
+        if(shown==app+0x119a88u && row==PC_MIDI_ROW)go=1;
+        else if(shown==app+0x119a88u && PC_USB && row==PC_USB_ROW)go=3;
+        else if(shown==app+0x1e978u && (cell==PC_CELL_MIDI || cell==PC_CELL_USB))go=2;
     }
     ((void (*)(void *,unsigned))0x08123819u)(session,arg);
     if(go==1)pc_open_midi();
+    else if(go==3)pc_open_usb();
     else if(go==2)pc_post_ui(0xcbu,0);
 }
 /* PROJ Save button (0x0813e4a8, bl SessionMgr::Save 0x081224d4): a Bank #
