@@ -357,7 +357,8 @@ Also in TOOLS > **MIDI Settings**:
 
 The bluebox eurorack sends the computer 18 channels over USB-C EXT. TOOLS >
 **USB Audio Out** (tap it, or press B with it selected; B goes back) has a row
-per channel, **USB 1** to **USB 18**, each On or Off (all On by default, saved
+per channel, labelled with its number and source (**1 Track 1** to **12 Track
+12**, **13 Main L**, **14 Main R**, **15 Out Bus** to **18 Out Bus**), each On or Off (all On by default, saved
 in `settings.tml`). Only the channels left On are sent, in their order, and the
 bluebox tells the computer it has that many: USB 1-8 On, the rest Off, gives an
 8-channel device. After a change the computer sees the bluebox unplug and plug

@@ -42,7 +42,7 @@ static void xf_cv(uint32_t now);
 #define PC_XF_CH 0x296u /* scene page "X-Fade Ch" (key xfch): 0 All, 1..16 = channel of the X-Fade CC; LEARN sets it */
 #define PC_XF_CV 0x297u /* scene page "X-Fade CV" (key xfcv): 0 Off, 1..6 = CV n for -5..+5 V, 7..12 = CV n-6 for 0..+5 V */
 #define PC_USB_ROW 0x298u /* Tools row "USB Audio Out": a tap, or B with the row selected, opens the USB page */
-#define PC_USB_CH 0x299u /* USB page "USB 1:".."USB 18:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
+#define PC_USB_CH 0x299u /* USB page "1 Track 1:".."18 Out Bus:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
 #define PC_USB_N 18u
 #define PC_LAST_TAG 0x2aau
 #define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
@@ -201,8 +201,12 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     def_enum(table,PC_XF_CV,"X-Fade CV:",xf_cv,13,"xfcv");
     def_enum(table,PC_USB_ROW,"USB Audio Out",midi_open,1,"usbmenu"); /* one value: turning does nothing */
     static const char *const on_off[2]={"Off","On"};
-    static const char *const usb_label[PC_USB_N]={"USB 1:","USB 2:","USB 3:","USB 4:","USB 5:","USB 6:","USB 7:","USB 8:","USB 9:",
-        "USB 10:","USB 11:","USB 12:","USB 13:","USB 14:","USB 15:","USB 16:","USB 17:","USB 18:"};
+    /* USB 1-12: the engine's 12 track channels, 13/14 the main mix, 15-18 the
+     * other output buses (packing in 0x0804c778, eurorack; which connector
+     * each of 15-18 feeds is not checked yet). */
+    static const char *const usb_label[PC_USB_N]={"1 Track 1:","2 Track 2:","3 Track 3:","4 Track 4:","5 Track 5:","6 Track 6:",
+        "7 Track 7:","8 Track 8:","9 Track 9:","10 Track 10:","11 Track 11:","12 Track 12:","13 Main L:","14 Main R:",
+        "15 Out Bus:","16 Out Bus:","17 Out Bus:","18 Out Bus:"};
     static const char *const usb_key[PC_USB_N]={"usbch1","usbch2","usbch3","usbch4","usbch5","usbch6","usbch7","usbch8","usbch9",
         "usbch10","usbch11","usbch12","usbch13","usbch14","usbch15","usbch16","usbch17","usbch18"};
     for(unsigned i=0;i<PC_USB_N;i++)def_enum(table,PC_USB_CH+i,usb_label[i],on_off,2,usb_key[i]);
