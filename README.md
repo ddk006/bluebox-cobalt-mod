@@ -386,7 +386,10 @@ sends a 1 kHz test tone at -12 dBFS on the device's channels 1-2, 3-4 (the
 S-4's track 1) or all of them, the other channels silent. **DEV State** shows Off, Waiting, No audio (no audio
 output on the device), Starting, Sending, Error, No memory or Too big (more
 than one full-speed packet), **DEV Ch** the device's channel count, **DEV Pkts** what happened to the
-packets in the last second (OK, No SOF, Stuck, Not ready, NYET, Error, Stall).
+packets in the last second (OK, No SOF, Stuck, Not ready, NYET, Error, Stall;
+with a feedback endpoint OK also means the device answers it near 48 frames,
+that is, it runs the stream: "OK, no FB" packets out but no answer, "OK, FB
+odd" answers far from 48 or empty).
 The three update while the page is open. The port is full speed: at most
 1023 bytes per ms (10 channels of 16 bit fit). Like a computer, the bluebox
 unmutes the device's input and sets it to 0 dB, and follows the device's clock

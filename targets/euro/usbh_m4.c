@@ -69,7 +69,10 @@ enum {ST_OFF, ST_WAIT, ST_NOAUDIO, ST_START, ST_SEND, ST_ERROR, ST_NOMEM, ST_BIG
 /* Shared with src/pc_m4.c (struct pc_usb): M4 only, the M7 reads magic/mask/format. */
 struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts;};
 /* mode: 0 Off, 1 sine on 1-2, 2 on 3-4, 3 on all. pkts ("DEV Pkts:"), per second: */
-enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL};
+enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD};
+/* PK_OK with a feedback endpoint: packets out and the device's feedback near 48
+ * (it runs the stream); PK_NOFB packets out but no feedback answer; PK_FBODD
+ * answers far from 48 (or empty). */
 #define LINE ((volatile struct host_line *)0x38800ee0u)
 _Static_assert(sizeof(struct host_line) == 32, "the 0xee0 line");
 
@@ -86,7 +89,8 @@ struct host_ctx {
     uint32_t sent, late;
     uint32_t done, bad, last_bad, sofs, fill_mode;
     uint8_t fu, fb_ep, fb_pipe, fb_open, fb_inflight, fb_size, nmax, phase;
-    uint32_t fb, acc, fb_seen;   /* frames per ms, 16.16 */
+    uint32_t fb, acc, fb_seen;   /* frames per ms, 16.16; feedback answers near 48 this second */
+    uint32_t fb_odd;             /* answers far from 48 (or empty) this second */
     uint8_t fb_buf[4], ctl[4];
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
@@ -294,8 +298,9 @@ static void feedback(void *phost, struct host_ctx *c)
     if (c->fb_inflight && st == 1u) {
         uint32_t v = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
         v = c->fb_size == 3u ? v << 2 : v | (uint32_t)c->fb_buf[3] << 24;
-        if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;}
+        if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;} else c->fb_odd++;
     }
+    for (unsigned i = 0; i < 4u; i++) c->fb_buf[i] = 0;   /* an empty answer reads as 0 */
     submit_urb(phost, c->fb_pipe, 1 /* in */, 1u /* isochronous */, 1u /* data */, c->fb_buf, c->fb_size, 0);
     c->fb_inflight = 1;
 }
@@ -324,8 +329,9 @@ uint8_t host_sof(void *phost)
         }
         if (++c->sofs >= 1000u) {   /* once a second: what happened to the packets */
             LINE->pkts = c->bad ? (c->last_bad >= 2u && c->last_bad <= 5u ? PK_NOTREADY + c->last_bad - 2u : PK_ERROR)
-                       : c->done ? PK_OK : PK_STUCK;
-            c->sofs = c->done = c->bad = 0;
+                       : !c->done ? PK_STUCK
+                       : !c->fb_open || c->fb_seen ? PK_OK : c->fb_odd ? PK_FBODD : PK_NOFB;
+            c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = 0;
         }
     }
     return MIDI_PDATA || !c ? midi_sof(phost) : USBH_OK;

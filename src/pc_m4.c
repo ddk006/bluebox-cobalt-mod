@@ -224,8 +224,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     static const char *const dev_ch[33]={"-","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
         "17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32"};
     def_enum(table,PC_DEV_CH,"DEV Ch:",dev_ch,33,"devch");
-    static const char *const dev_pkts[8]={"-","OK","No SOF","Stuck","Not ready","NYET","Error","Stall"};
-    def_enum(table,PC_DEV_PKTS,"DEV Pkts:",dev_pkts,8,"devpkts");
+    static const char *const dev_pkts[10]={"-","OK","No SOF","Stuck","Not ready","NYET","Error","Stall","OK, no FB","OK, FB odd"};
+    def_enum(table,PC_DEV_PKTS,"DEV Pkts:",dev_pkts,10,"devpkts");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -442,7 +442,7 @@ void pc_main(void *inputs) {
         unsigned dev=(unsigned)fw_get(PC_SETTINGS,PC_DEV_AUDIO);if(dev>3u)dev=0;
         if((u->dev_mode!=0u)!=(dev!=0u)){u->dev_state=dev?1u:0u;u->dev_ch=0;u->dev_pkts=0;} /* Waiting until a device starts */
         u->dev_mode=dev;
-        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u,pk=dev && u->dev_pkts<8u?u->dev_pkts:0u;
+        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u,pk=dev && u->dev_pkts<10u?u->dev_pkts:0u;
         int shown=0;
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_PKTS)!=pk){PC_TAG_SET(PC_SETTINGS,PC_DEV_PKTS,(int)pk);shown=1;}
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_STATE)!=st){PC_TAG_SET(PC_SETTINGS,PC_DEV_STATE,(int)st);shown=1;}

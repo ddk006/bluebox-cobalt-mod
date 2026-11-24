@@ -136,6 +136,15 @@ check(all(sample(f,c)==0 for f in range(48) for c in (0,1,4,5,6,7,8,9)) and all(
 w32(u,LINE+0xc,3);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
 check(all(sample(f,c)==sample(f,0) for f in range(48) for c in range(10)) and any(sample(f,9)==8192 for f in range(48)),'DEV Audio Sine all: the sine on all 10 channels')
 w32(u,LINE+0xc,1)
+fbval[0]=0
+for i in range(2000):call(u,F['host_sof'],PHOST)   # a whole window of feedback far from 48
+check(u32(u,LINE+0x1c)==9,'packets out, feedback answers far from 48 (or empty): DEV Pkts OK, FB odd')
+fbst[0]=0
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==8,'packets out, no feedback answer: DEV Pkts OK, no FB')
+fbst[0]=1;fbval[0]=48<<14
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==1,'feedback near 48 again: DEV Pkts OK')
 urb[0]=4
 for i in range(1000):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==6,'packets ending in URB_ERROR: DEV Pkts Error')

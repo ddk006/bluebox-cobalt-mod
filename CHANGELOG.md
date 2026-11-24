@@ -15,7 +15,9 @@
   (packet results per second) on the USB page; the page rebuilds its rows
   when they change (edit page flag +0xA3E2, as stock value events). Mute off
   and 0 dB on the stream's feature unit; the feedback endpoint (10.14 or
-  16.16) sets 47-49 frames per packet, the sine phase runs on. The MIDI host class
+  16.16) sets 47-49 frames per packet, the sine phase runs on. DEV Pkts
+  "OK, no FB" / "OK, FB odd" when the device does not answer its feedback
+  endpoint near 48 (it does not run the stream). The MIDI host class
   is wrapped (registration hook at 0x081056C6): with DEV Audio on it reads the
   device's config descriptor, selects its isochronous audio OUT stream
   (SET_INTERFACE, UAC2 SET_CUR 48 kHz), enlarges the periodic TX FIFO when
