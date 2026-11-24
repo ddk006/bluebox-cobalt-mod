@@ -45,16 +45,17 @@ static void xf_cv(uint32_t now);
 #define PC_USB_CH 0x299u /* USB page "1 Track 1:".."18 Out Bus:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
 #define PC_USB_N 18u
 #define PC_USB_FMT 0x2abu /* USB page "Format:" (key usbfmt): 0 24 bit (stock), 1 16 bit */
-#define PC_DEV_AUDIO 0x2acu /* USB page "DEV Audio:" (key devaudio): 0 Off, 1 Sine 1k to a device on the DEV port (targets/euro/usbh_m4.c) */
+#define PC_DEV_AUDIO 0x2acu /* USB page "DEV Audio:" (key devaudio): 0 Off, 1k sine to a device on the DEV port (targets/euro/usbh_m4.c) on 1 channels 1-2, 2 channels 3-4, 3 all */
 #define PC_DEV_STATE 0x2adu /* USB page "DEV State:" (key devstate): shown only, set from the driver */
 #define PC_DEV_CH 0x2aeu /* USB page "DEV Ch:" (key devch): the device's OUT channels, shown only */
-#define PC_LAST_TAG 0x2aeu
+#define PC_DEV_PKTS 0x2afu /* USB page "DEV Pkts:" (key devpkts): last second's packet result, shown only */
+#define PC_LAST_TAG 0x2afu
 #define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
 #define PC_USB 0 /* USB audio channel choice (eurorack, targets/euro/usb_m7.c): targets/euro.json sets 1 */
 /* USB channels to send (bit n = USB n+1), written by the M4 for the M7: a
  * cache line of its own (the M7 caches backup SRAM and invalidates it before
  * reading). */
-struct pc_usb {uint32_t magic,mask,format,dev_mode,dev_state,dev_ch,dev_ctx,spare;}; /* format: 0 24 bit, 1 16 bit; dev_*: DEV port audio (targets/euro/usbh_m4.c, M4 only) */
+struct pc_usb {uint32_t magic,mask,format,dev_mode,dev_state,dev_ch,dev_ctx,dev_pkts;}; /* format: 0 24 bit, 1 16 bit; dev_*: DEV port audio (targets/euro/usbh_m4.c, M4 only) */
 #define PC_USB_OUT ((volatile struct pc_usb *)0x38800ee0u)
 #define PC_USB_MAGIC 0x55534231u
 _Static_assert(sizeof(struct pc_usb)==32,"USB channel mask fills the 0xee0 cache line");
@@ -216,13 +217,15 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     for(unsigned i=0;i<PC_USB_N;i++)def_enum(table,PC_USB_CH+i,usb_label[i],on_off,2,usb_key[i]);
     static const char *const usb_fmt[2]={"24 bit","16 bit"};
     def_enum(table,PC_USB_FMT,"Format:",usb_fmt,2,"usbfmt");
-    static const char *const dev_audio[2]={"Off","Sine 1k"};
-    def_enum(table,PC_DEV_AUDIO,"DEV Audio:",dev_audio,2,"devaudio");
+    static const char *const dev_audio[4]={"Off","Sine 1-2","Sine 3-4","Sine all"};
+    def_enum(table,PC_DEV_AUDIO,"DEV Audio:",dev_audio,4,"devaudio");
     static const char *const dev_state[8]={"Off","Waiting","No audio","Starting","Sending","Error","No memory","Too big"};
     def_enum(table,PC_DEV_STATE,"DEV State:",dev_state,8,"devstate");
     static const char *const dev_ch[33]={"-","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
         "17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32"};
     def_enum(table,PC_DEV_CH,"DEV Ch:",dev_ch,33,"devch");
+    static const char *const dev_pkts[8]={"-","OK","No SOF","Stuck","Not ready","NYET","Error","Stall"};
+    def_enum(table,PC_DEV_PKTS,"DEV Pkts:",dev_pkts,8,"devpkts");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -251,6 +254,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     STOCK_ADD(set,PC_DEV_AUDIO,0); /* DEV port audio: Off (stock) */
     STOCK_ADD(set,PC_DEV_STATE,0);
     STOCK_ADD(set,PC_DEV_CH,0);
+    STOCK_ADD(set,PC_DEV_PKTS,0);
 }
 
 /* MIDI poll (TIM4 IRQ) at 0x0810341a: r0=status, r4=message (data1 at +1).
@@ -434,9 +438,11 @@ void pc_main(void *inputs) {
         for(unsigned i=0;i<PC_USB_N;i++)if(fw_get(PC_SETTINGS,PC_USB_CH+i))mask|=1u<<i;
         volatile struct pc_usb *u=PC_USB_OUT;
         u->mask=mask;u->format=fw_get(PC_SETTINGS,PC_USB_FMT)?1u:0u;u->magic=PC_USB_MAGIC;
-        unsigned dev=fw_get(PC_SETTINGS,PC_DEV_AUDIO)==1?1u:0u;
-        if(u->dev_mode!=dev){u->dev_mode=dev;u->dev_state=dev?1u:0u;u->dev_ch=0;} /* Waiting until a device starts */
-        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u;
+        unsigned dev=(unsigned)fw_get(PC_SETTINGS,PC_DEV_AUDIO);if(dev>3u)dev=0;
+        if((u->dev_mode!=0u)!=(dev!=0u)){u->dev_state=dev?1u:0u;u->dev_ch=0;u->dev_pkts=0;} /* Waiting until a device starts */
+        u->dev_mode=dev;
+        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u,pk=dev && u->dev_pkts<8u?u->dev_pkts:0u;
+        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_PKTS)!=pk)PC_TAG_SET(PC_SETTINGS,PC_DEV_PKTS,(int)pk);
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_STATE)!=st)PC_TAG_SET(PC_SETTINGS,PC_DEV_STATE,(int)st);
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_CH)!=ch)PC_TAG_SET(PC_SETTINGS,PC_DEV_CH,(int)ch);
     }
@@ -603,6 +609,7 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
         append(list,PC_DEV_AUDIO,fw_get(PC_SETTINGS,PC_DEV_AUDIO));
         append(list,PC_DEV_STATE,fw_get(PC_SETTINGS,PC_DEV_STATE));
         append(list,PC_DEV_CH,fw_get(PC_SETTINGS,PC_DEV_CH));
+        append(list,PC_DEV_PKTS,fw_get(PC_SETTINGS,PC_DEV_PKTS));
         for(unsigned i=0;i<PC_USB_N;i++)append(list,PC_USB_CH+i,fw_get(PC_SETTINGS,PC_USB_CH+i));
         return 1;
     }
@@ -637,7 +644,7 @@ void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
         }
         return;
     }
-    if(*cell==PC_CELL_USB && (id==PC_DEV_STATE || id==PC_DEV_CH))return; /* shown only */
+    if(*cell==PC_CELL_USB && (id==PC_DEV_STATE || id==PC_DEV_CH || id==PC_DEV_PKTS))return; /* shown only */
     if(*cell==PC_CELL_MIDI || *cell==PC_CELL_USB){
         uint16_t settings=0x18;
         knob(session,&settings,id,value,extra);

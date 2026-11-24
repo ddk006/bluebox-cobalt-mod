@@ -100,14 +100,29 @@ call(u,F['host_sof'],PHOST)
 check(len(sent)==1 and u32(u,HEAP+0x18)==1,'next SOF with the last packet not out yet (URB idle): skipped and counted')
 urb[0]=1;call(u,F['host_sof'],PHOST);call(u,F['host_sof'],PHOST)
 check(len(sent)==3 and u32(u,HEAP+0x14)==3,'URB done: a packet every SOF')
+check(u32(u,LINE+0x1c)==2,'DEV Pkts: No SOF until the first second is counted')
+for i in range(997):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==1,'after 1000 SOFs with the packets done: DEV Pkts OK')
+w32(u,LINE+0xc,2);del sent[:];call(u,F['host_sof'],PHOST);p=sent[0][4]
+check(all(sample(f,c)==0 for f in range(48) for c in (0,1,4,5,6,7,8,9)) and [sample(f,2) for f in (0,12,36)]==[0,8192,-8192] and all(sample(f,3)==sample(f,2) for f in range(48)),'DEV Audio Sine 3-4: the sine moves to channels 3 and 4 (the S-4 track 1), the rest silent')
+w32(u,LINE+0xc,3);del sent[:];call(u,F['host_sof'],PHOST);p=sent[0][4]
+check(all(sample(f,c)==sample(f,0) for f in range(48) for c in range(10)) and sample(12,9)==8192,'DEV Audio Sine all: the sine on all 10 channels')
+w32(u,LINE+0xc,1)
+urb[0]=4
+for i in range(1000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==6,'packets ending in URB_ERROR: DEV Pkts Error')
+urb[0]=0
+for i in range(2000):call(u,F['host_sof'],PHOST)   # a whole window without a finished packet
+check(u32(u,LINE+0x1c)==3,'packets never done (URB idle): DEV Pkts Stuck')
+urb[0]=1;call(u,F['host_sof'],PHOST)
 del log[:];call(u,F['host_bgnd'],PHOST)
 check(log==['midi_bgnd'],'Bgnd: MIDI')
-w32(u,LINE+0xc,0);call(u,F['host_sof'],PHOST);w32(u,LINE+0xc,1)
-check(len(sent)==3,'DEV Audio switched Off while sending: no more packets')
+n=len(sent);w32(u,LINE+0xc,0);call(u,F['host_sof'],PHOST);w32(u,LINE+0xc,1)
+check(len(sent)==n,'DEV Audio switched Off while sending: no more packets')
 del log[:];call(u,F['host_deinit'],PHOST)
-check(('close_pipe',3) in log and ('free_pipe',3) in log and frees==[HEAP] and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==0 and state()==(1,0),'DeInit: pipe closed and freed, context back to the heap, MIDI DeInit; state Waiting')
+check(('close_pipe',3) in log and ('free_pipe',3) in log and frees==[HEAP] and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==0 and state()==(1,0) and u32(u,LINE+0x1c)==0,'DeInit: pipe closed and freed, context back to the heap, MIDI DeInit; state Waiting')
 call(u,F['host_sof'],PHOST)
-check(len(sent)==3,'after DeInit the SOF sends nothing')
+check(len(sent)==n,'after DeInit the SOF sends nothing')
 
 # No MIDI interface: audio only, MIDI functions left out.
 reset(1,midi=False);midi_ret[0]=2

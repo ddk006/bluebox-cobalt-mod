@@ -11,8 +11,9 @@
  * "DEV Audio" on (USB page, src/pc_m4.c) the wrapper also finds the device's
  * audio OUT stream (host -> device, isochronous), selects it (SET_INTERFACE,
  * UAC2 SET_CUR 48 kHz on its clock) and sends one packet of 48 frames per
- * SOF (1 ms). Stage 1: a 1 kHz sine at -12 dBFS on channels 1 and 2, the
- * other channels silent. The device's feedback endpoint is not read yet.
+ * SOF (1 ms). Stage 1: a 1 kHz sine at -12 dBFS on channels 1-2, 3-4 (the
+ * S-4's track 1) or all of them, the other channels silent. Each second the
+ * packet results are summed up for the USB page ("DEV Pkts:"). The device's feedback endpoint is not read yet.
  *
  * The packet goes through the periodic TX FIFO, 0xe0 words (896 bytes) after
  * the stock USB_HostInit (0x08117ac8, HS-core layout); a bigger packet moves
@@ -65,7 +66,9 @@ enum {URB_IDLE};
 /* USB page state ("DEV State:"), same order as the list in src/pc_m4.c. */
 enum {ST_OFF, ST_WAIT, ST_NOAUDIO, ST_START, ST_SEND, ST_ERROR, ST_NOMEM, ST_BIG};
 /* Shared with src/pc_m4.c (struct pc_usb): M4 only, the M7 reads magic/mask/format. */
-struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, spare;};
+struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts;};
+/* mode: 0 Off, 1 sine on 1-2, 2 on 3-4, 3 on all. pkts ("DEV Pkts:"), per second: */
+enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL};
 #define LINE ((volatile struct host_line *)0x38800ee0u)
 _Static_assert(sizeof(struct host_line) == 32, "the 0xee0 line");
 
@@ -79,6 +82,7 @@ struct host_ctx {
     uint8_t ep, itf, alt, ac_itf, clock, nrch, subslot, uac2;
     uint16_t maxp, len;
     uint32_t sent, late;
+    uint32_t done, bad, last_bad, sofs, fill_mode;
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
     uint8_t pkt[PKT_MAX];
@@ -137,12 +141,14 @@ static int parse(struct host_ctx *c, unsigned total)
 }
 
 /* One packet: the sine on channels 1 and 2 (top bytes of each subslot), the rest 0. */
-static void fill(struct host_ctx *c)
+static void fill(struct host_ctx *c, unsigned mode)
 {
     uint8_t *p = c->pkt;
+    c->fill_mode = mode;
     for (unsigned f = 0; f < FRAMES; f++)
         for (unsigned ch = 0; ch < c->nrch; ch++) {
-            int16_t v = ch < 2u ? sine48[f] : 0;
+            int on = mode == 3u || (mode == 1u && ch < 2u) || (mode == 2u && (ch == 2u || ch == 3u));
+            int16_t v = on ? sine48[f] : 0;
             for (unsigned b = 0; b + 2u < c->subslot; b++) *p++ = 0;
             *p++ = (uint8_t)v; *p++ = (uint8_t)((uint16_t)v >> 8);
         }
@@ -166,7 +172,8 @@ uint8_t host_init(void *phost)
 {
     volatile struct host_line *l = line();
     l->ctx = 0;
-    if (l->mode != 1u) return midi_init(phost);   /* DEV Audio Off: the stock class */
+    l->pkts = PK_NONE;
+    if (l->mode == 0u || l->mode > 3u) return midi_init(phost);   /* DEV Audio Off: the stock class */
     uint8_t r = midi_init(phost);
     struct host_ctx *c = port_malloc(sizeof *c);
     l->channels = 0;
@@ -223,9 +230,10 @@ uint8_t host_requests(void *phost)
         c->pipe = alloc_pipe(phost, c->ep);
         if (c->pipe == 0xffu) {set_state(ST_ERROR); c->step = R_MIDI; break;}
         open_pipe(phost, c->pipe, c->ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u /* isochronous */, c->maxp);
-        fill(c);
+        fill(c, LINE->mode);
         c->open = 1;
         set_state(ST_SEND);
+        LINE->pkts = PK_NOSOF;   /* until the first second of SOFs */
         c->step = R_MIDI;
         break;
     default:
@@ -239,12 +247,21 @@ uint8_t host_requests(void *phost)
 uint8_t host_sof(void *phost)
 {
     struct host_ctx *c = ctx();
-    if (c && c->open && LINE->mode == 1u) {
-        if (c->inflight && urb_state(phost, c->pipe) == URB_IDLE) c->late++;
+    unsigned mode = LINE->mode;
+    if (c && c->open && mode >= 1u && mode <= 3u) {
+        unsigned st = c->inflight ? urb_state(phost, c->pipe) : 1u;
+        if (c->inflight && st == URB_IDLE) c->late++;
         else {
+            if (c->inflight) {if (st == 1u) c->done++; else {c->bad++; c->last_bad = st;}}
+            if (c->fill_mode != mode) fill(c, mode);
             submit_urb(phost, c->pipe, 0 /* out */, 1u /* isochronous */, 1u /* data */, c->pkt, c->len, 0);
             c->inflight = 1;
             c->sent++;
+        }
+        if (++c->sofs >= 1000u) {   /* once a second: what happened to the packets */
+            LINE->pkts = c->bad ? (c->last_bad >= 2u && c->last_bad <= 5u ? PK_NOTREADY + c->last_bad - 2u : PK_ERROR)
+                       : c->done ? PK_OK : PK_STUCK;
+            c->sofs = c->done = c->bad = 0;
         }
     }
     return MIDI_PDATA || !c ? midi_sof(phost) : USBH_OK;
@@ -275,6 +292,7 @@ uint8_t host_deinit(void *phost)
         c->magic = 0;
         port_free(c);
     }
-    if (l->mode == 1u) {set_state(ST_WAIT); l->channels = 0;}
+    if (l->mode >= 1u && l->mode <= 3u) {set_state(ST_WAIT); l->channels = 0;}
+    l->pkts = PK_NONE;
     return MIDI_PDATA || !c ? midi_deinit(phost) : USBH_OK;
 }
