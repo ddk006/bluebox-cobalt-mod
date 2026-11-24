@@ -44,13 +44,14 @@ static void xf_cv(uint32_t now);
 #define PC_USB_ROW 0x298u /* Tools row "USB Audio Out": a tap, or B with the row selected, opens the USB page */
 #define PC_USB_CH 0x299u /* USB page "1 Track 1:".."18 Out Bus:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
 #define PC_USB_N 18u
-#define PC_LAST_TAG 0x2aau
+#define PC_USB_FMT 0x2abu /* USB page "Format:" (key usbfmt): 0 24 bit (stock), 1 16 bit */
+#define PC_LAST_TAG 0x2abu
 #define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
 #define PC_USB 0 /* USB audio channel choice (eurorack, targets/euro/usb_m7.c): targets/euro.json sets 1 */
 /* USB channels to send (bit n = USB n+1), written by the M4 for the M7: a
  * cache line of its own (the M7 caches backup SRAM and invalidates it before
  * reading). */
-struct pc_usb {uint32_t magic,mask,spare[6];};
+struct pc_usb {uint32_t magic,mask,format,spare[5];}; /* format: 0 24 bit, 1 16 bit */
 #define PC_USB_OUT ((volatile struct pc_usb *)0x38800ee0u)
 #define PC_USB_MAGIC 0x55534231u
 _Static_assert(sizeof(struct pc_usb)==32,"USB channel mask fills the 0xee0 cache line");
@@ -210,6 +211,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     static const char *const usb_key[PC_USB_N]={"usbch1","usbch2","usbch3","usbch4","usbch5","usbch6","usbch7","usbch8","usbch9",
         "usbch10","usbch11","usbch12","usbch13","usbch14","usbch15","usbch16","usbch17","usbch18"};
     for(unsigned i=0;i<PC_USB_N;i++)def_enum(table,PC_USB_CH+i,usb_label[i],on_off,2,usb_key[i]);
+    static const char *const usb_fmt[2]={"24 bit","16 bit"};
+    def_enum(table,PC_USB_FMT,"Format:",usb_fmt,2,"usbfmt");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -234,6 +237,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     STOCK_ADD(set,PC_XF_CV,0);     /* X-Fade CV: Off */
     STOCK_ADD(set,PC_USB_ROW,0);   /* Tools row; a tap opens the USB page */
     for(unsigned i=0;i<PC_USB_N;i++)STOCK_ADD(set,PC_USB_CH+i,1); /* every USB channel on (stock) */
+    STOCK_ADD(set,PC_USB_FMT,0);   /* USB page: 24 bit (stock) */
 }
 
 /* MIDI poll (TIM4 IRQ) at 0x0810341a: r0=status, r4=message (data1 at +1).
@@ -416,7 +420,7 @@ void pc_main(void *inputs) {
         uint32_t mask=0;
         for(unsigned i=0;i<PC_USB_N;i++)if(fw_get(PC_SETTINGS,PC_USB_CH+i))mask|=1u<<i;
         volatile struct pc_usb *u=PC_USB_OUT;
-        u->mask=mask;u->magic=PC_USB_MAGIC;
+        u->mask=mask;u->format=fw_get(PC_SETTINGS,PC_USB_FMT)?1u:0u;u->magic=PC_USB_MAGIC;
     }
     if(s->want&PC_MSG){
         if(busy)s->want=0;
@@ -577,6 +581,7 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
     }
     if(*cell==PC_CELL_USB){
         *(uint32_t *)list=0;
+        append(list,PC_USB_FMT,fw_get(PC_SETTINGS,PC_USB_FMT)); /* first: visible without scrolling */
         for(unsigned i=0;i<PC_USB_N;i++)append(list,PC_USB_CH+i,fw_get(PC_SETTINGS,PC_USB_CH+i));
         return 1;
     }

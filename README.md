@@ -366,10 +366,19 @@ back in (about a quarter of a second without USB audio); each channel set has
 its own serial number, so the computer does not mix them up. All On, or all
 Off, is the stock 18-channel device.
 
+The first row, **Format** (`usbfmt`), picks the sample format: **24 bit** (stock,
+3 bytes per sample) or **16 bit** (2 bytes per sample, the upper 16 bits of each
+sample). Some USB hosts in instruments take only 16 bit (the Torso S-4 sends
+16 bit itself); a computer takes both. 16 bit with all channels On is not the
+stock device; the serial number then ends in `-16`.
+
 USB 1-12 come from the 12 track channels, USB 13/14 is the main mix, USB 15-18
 are the other four output buses (from the firmware's packing code; which
 connector each of 15-18 is was not checked). USB audio from the computer
 (**USB Rcv**) and MIDI are unchanged. Code: `targets/euro/usb_m7.c`.
+`tools/usb_audio_desc.py` prints the USB audio descriptors (channels, format,
+endpoints) of every audio device plugged into the computer (needs libusb and
+pyusb).
 
 ### Themes
 

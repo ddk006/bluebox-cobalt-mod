@@ -9,7 +9,12 @@
   on a change, serial number with the channel mask). Euro-only payload at
   0x080C8000 (`targets/euro/usb_m7.c`), inserted by the euro build; the M4
   passes the mask in backup SRAM 0x38800EE0. Settings capacity 176, the
-  definition table 0x2ab records.
+  definition table 0x2ac records.
+- **USB audio out format (eurorack):** **Format** on the same page: 24 bit
+  (stock) or 16 bit (`usbfmt`). At 16 bit the descriptor says 2-byte subslots
+  and 16-bit resolution and the upper two bytes of each sample are sent;
+  the M4 passes it at 0x38800EE8. `tools/usb_audio_desc.py` reads the USB audio
+  descriptors of the devices on the computer.
 - **Crossfader morph and live scenes:** every number glides, a fader move
   rewrites only the items where A and B differ (round robin, so fast moves
   reach all of them); the heard scene keeps the live state; empty scenes sound
