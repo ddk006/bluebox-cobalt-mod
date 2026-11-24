@@ -10,6 +10,13 @@
   0x080C8000 (`targets/euro/usb_m7.c`), inserted by the euro build; the M4
   passes the mask in backup SRAM 0x38800EE0. Settings capacity 176, the
   definition table 0x2ac records.
+- **DEV port audio, stage 1 (eurorack, experimental):** **DEV Audio** (Off /
+  Sine 1k), **DEV State** and **DEV Ch** on the USB page. The MIDI host class
+  is wrapped (registration hook at 0x081056C6): with DEV Audio on it reads the
+  device's config descriptor, selects its isochronous audio OUT stream
+  (SET_INTERFACE, UAC2 SET_CUR 48 kHz), enlarges the periodic TX FIFO when
+  needed and sends 48 frames per SOF with a 1 kHz sine on channels 1/2. MIDI
+  keeps running. M4 payload at 0x080CC000; buffers from the FreeRTOS heap.
 - **USB audio out format (eurorack):** **Format** on the same page: 24 bit
   (stock) or 16 bit (`usbfmt`). At 16 bit the descriptor says 2-byte subslots
   and 16-bit resolution and the upper two bytes of each sample are sent;

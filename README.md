@@ -376,6 +376,21 @@ USB 1-12 come from the 12 track channels, USB 13/14 is the main mix, USB 15-18
 are the other four output buses (from the firmware's packing code; which
 connector each of 15-18 is was not checked). USB audio from the computer
 (**USB Rcv**) and MIDI are unchanged. Code: `targets/euro/usb_m7.c`.
+### Audio to a device on the DEV port (eurorack, experimental)
+
+The DEV port (USB-A, the port for MIDI controllers) is a USB host. With
+**DEV Audio** on the USB page set to **Sine 1k**, the bluebox also sends audio
+to a class-compliant USB audio device plugged in there (for example a Torso
+S-4 as a device), next to MIDI. Stage 1 sends a 1 kHz test tone at -12 dBFS
+on the device's channels 1 and 2 (the S-4's track 1 when its input is USB),
+the other channels silent. **DEV State** shows Off, Waiting, No audio (no audio
+output on the device), Starting, Sending, Error, No memory or Too big (more
+than one full-speed packet), **DEV Ch** the device's channel count; leave the
+page and open it again to refresh them. The port is full speed: at most
+1023 bytes per ms (10 channels of 16 bit fit). The device's clock feedback is
+not used yet. Default Off: the port then works as stock. Code:
+`targets/euro/usbh_m4.c`.
+
 `tools/usb_audio_desc.py` prints the USB audio descriptors (channels, format,
 endpoints) of every audio device plugged into the computer (needs libusb and
 pyusb).

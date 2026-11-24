@@ -311,8 +311,8 @@
     "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
    },
    {
-    "old": "len(saved)==7+SLOTS+29",
-    "new": "len(saved)==6+SLOTS+29",
+    "old": "len(saved)==7+SLOTS+32",
+    "new": "len(saved)==6+SLOTS+32",
     "count": 1,
     "why": "the euro settings.tml has six stock tags"
    },
