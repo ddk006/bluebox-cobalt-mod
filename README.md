@@ -388,8 +388,9 @@ output on the device), Starting, Sending, Error, No memory or Too big (more
 than one full-speed packet), **DEV Ch** the device's channel count, **DEV Pkts** what happened to the
 packets in the last second (OK, No SOF, Stuck, Not ready, NYET, Error, Stall).
 The three update while the page is open. The port is full speed: at most
-1023 bytes per ms (10 channels of 16 bit fit). The device's clock feedback is
-not used yet. Default Off: the port then works as stock. Code:
+1023 bytes per ms (10 channels of 16 bit fit). Like a computer, the bluebox
+unmutes the device's input and sets it to 0 dB, and follows the device's clock
+feedback (47-49 frames per ms) when it has one. Default Off: the port then works as stock. Code:
 `targets/euro/usbh_m4.c`.
 
 `tools/usb_audio_desc.py` prints the USB audio descriptors (channels, format,

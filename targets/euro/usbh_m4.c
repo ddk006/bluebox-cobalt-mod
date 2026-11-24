@@ -10,10 +10,11 @@
  * (when its Init found a MIDI interface, the class pData is set), and with
  * "DEV Audio" on (USB page, src/pc_m4.c) the wrapper also finds the device's
  * audio OUT stream (host -> device, isochronous), selects it (SET_INTERFACE,
- * UAC2 SET_CUR 48 kHz on its clock) and sends one packet of 48 frames per
- * SOF (1 ms). Stage 1: a 1 kHz sine at -12 dBFS on channels 1-2, 3-4 (the
+ * UAC2 SET_CUR 48 kHz on its clock, mute off and 0 dB on the stream's feature
+ * unit) and sends one packet per SOF (1 ms): 48 frames, or 47-49 as the
+ * device's feedback endpoint asks (async sinks such as the Torso S-4). Stage 1: a 1 kHz sine at -12 dBFS on channels 1-2, 3-4 (the
  * S-4's track 1) or all of them, the other channels silent. Each second the
- * packet results are summed up for the USB page ("DEV Pkts:"). The device's feedback endpoint is not read yet.
+ * packet results are summed up for the USB page ("DEV Pkts:").
  *
  * The packet goes through the periodic TX FIFO, 0xe0 words (896 bytes) after
  * the stock USB_HostInit (0x08117ac8, HS-core layout); a bigger packet moves
@@ -75,7 +76,8 @@ _Static_assert(sizeof(struct host_line) == 32, "the 0xee0 line");
 #define CFG_MAX 1024u
 #define PKT_MAX 1024u
 #define FRAMES 48u   /* full speed: one packet per 1 ms frame at 48 kHz */
-enum {R_CFG, R_ITF, R_RATE, R_OPEN, R_MIDI};
+#define FRAMES_MAX 49u
+enum {R_CFG, R_ITF, R_RATE, R_MUTE, R_VOL, R_OPEN, R_MIDI};
 struct host_ctx {
     uint32_t magic;
     uint8_t step, pipe, open, inflight;
@@ -83,6 +85,9 @@ struct host_ctx {
     uint16_t maxp, len;
     uint32_t sent, late;
     uint32_t done, bad, last_bad, sofs, fill_mode;
+    uint8_t fu, fb_ep, fb_pipe, fb_open, fb_inflight, fb_size, nmax, phase;
+    uint32_t fb, acc, fb_seen;   /* frames per ms, 16.16 */
+    uint8_t fb_buf[4], ctl[4];
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
     uint8_t pkt[PKT_MAX];
@@ -111,8 +116,8 @@ static void kick(void *phost) {msg_put(P32(phost, OS_EVENT), 1u, 0u);}
  * streaming interface with an isochronous OUT endpoint and PCM of 2-4 bytes. */
 static int parse(struct host_ctx *c, unsigned total)
 {
-    uint8_t term_id[8], term_clk[8];
-    unsigned nterm = 0, num = 0, alt = 0, cls = 0, sub = 0, uac2 = 0, link = 0, nrch = 0, slot = 0, ep = 0, maxp = 0, ac = 0;
+    uint8_t term_id[8], term_clk[8], fu_id[8], fu_src[8];
+    unsigned nterm = 0, nfu = 0, num = 0, alt = 0, cls = 0, sub = 0, uac2 = 0, link = 0, nrch = 0, slot = 0, ep = 0, maxp = 0, ac = 0, fb = 0, fbmax = 0;
     for (unsigned i = 0; i + 2u <= total; ) {
         const uint8_t *d = c->cfg + i;
         unsigned len = d[0], type = d[1];
@@ -120,16 +125,20 @@ static int parse(struct host_ctx *c, unsigned total)
         if (type == 4u && len >= 9u) {
             if (cls == 1u && sub == 2u && alt && ep && nrch && slot >= 2u && slot <= 4u) break;   /* previous alt is it */
             num = d[2]; alt = d[3]; cls = d[5]; sub = d[6]; uac2 = d[7] == 0x20u;
-            link = nrch = slot = ep = maxp = 0;
+            link = nrch = slot = ep = maxp = fb = fbmax = 0;
             if (cls == 1u && sub == 1u) ac = num;
         } else if (type == 0x24u && cls == 1u && sub == 1u && uac2 && len >= 8u && d[2] == 2u && nterm < 8u) {
             term_id[nterm] = d[3]; term_clk[nterm] = d[7]; nterm++;   /* UAC2 input terminal: id, clock source */
+        } else if (type == 0x24u && cls == 1u && sub == 1u && uac2 && len >= 6u && d[2] == 6u && nfu < 8u) {
+            fu_id[nfu] = d[3]; fu_src[nfu] = d[4]; nfu++;   /* feature unit: id, source */
         } else if (type == 0x24u && cls == 1u && sub == 2u) {
             if (d[2] == 1u && uac2 && len >= 11u) {link = d[3]; nrch = d[10];}
             else if (d[2] == 2u && uac2 && len >= 6u) slot = d[4];
             else if (d[2] == 2u && !uac2 && len >= 8u) {nrch = d[4]; slot = d[5];}
         } else if (type == 5u && cls == 1u && sub == 2u && len >= 7u && !(d[2] & 0x80u) && (d[3] & 3u) == 1u) {
             ep = d[2]; maxp = (d[4] | d[5] << 8) & 0x7ffu;
+        } else if (type == 5u && cls == 1u && sub == 2u && len >= 7u && (d[2] & 0x80u) && (d[3] & 0x33u) == 0x11u) {
+            fb = d[2]; fbmax = (d[4] | d[5] << 8) & 0x7ffu;   /* isochronous IN, usage feedback */
         }
         i += len;
     }
@@ -137,21 +146,29 @@ static int parse(struct host_ctx *c, unsigned total)
     c->itf = (uint8_t)num; c->alt = (uint8_t)alt; c->ep = (uint8_t)ep; c->maxp = (uint16_t)maxp;
     c->nrch = (uint8_t)nrch; c->subslot = (uint8_t)slot; c->uac2 = (uint8_t)uac2; c->ac_itf = (uint8_t)ac; c->clock = 0;
     for (unsigned k = 0; k < nterm; k++) if (term_id[k] == link) c->clock = term_clk[k];
+    c->fu = 0;
+    for (unsigned k = 0; k < nfu; k++) if (fu_src[k] == link) c->fu = fu_id[k];
+    c->fb_ep = fbmax == 3u || fbmax == 4u ? (uint8_t)fb : 0;
+    c->fb_size = (uint8_t)fbmax;
     return 1;
 }
 
-/* One packet: the sine on channels 1 and 2 (top bytes of each subslot), the rest 0. */
-static void fill(struct host_ctx *c, unsigned mode)
+/* One packet of n frames: the sine (phase carried over) on the chosen
+ * channels, in the top two bytes of each subslot; the rest 0. */
+static void fill(struct host_ctx *c, unsigned mode, unsigned n)
 {
     uint8_t *p = c->pkt;
     c->fill_mode = mode;
-    for (unsigned f = 0; f < FRAMES; f++)
+    unsigned ph = c->phase;
+    for (unsigned f = 0; f < n; f++, ph = ph + 1u == FRAMES ? 0u : ph + 1u)
         for (unsigned ch = 0; ch < c->nrch; ch++) {
             int on = mode == 3u || (mode == 1u && ch < 2u) || (mode == 2u && (ch == 2u || ch == 3u));
-            int16_t v = on ? sine48[f] : 0;
+            int16_t v = on ? sine48[ph] : 0;
             for (unsigned b = 0; b + 2u < c->subslot; b++) *p++ = 0;
             *p++ = (uint8_t)v; *p++ = (uint8_t)((uint16_t)v >> 8);
         }
+    c->phase = (uint8_t)ph;
+    c->len = (uint16_t)(p - c->pkt);
 }
 
 /* Periodic TX FIFO deep enough for one packet (stock HS-core layout only). */
@@ -200,8 +217,10 @@ uint8_t host_requests(void *phost)
         if (r != USBH_OK) {set_state(ST_ERROR); c->step = R_MIDI; break;}
         if (!parse(c, total)) {set_state(ST_NOAUDIO); c->step = R_MIDI; break;}
         line()->channels = c->nrch;
-        c->len = (uint16_t)(FRAMES * c->nrch * c->subslot);
-        if (c->len > c->maxp || c->len > PKT_MAX || !fifo(c->len)) {set_state(ST_BIG); c->step = R_MIDI; break;}
+        unsigned frame = c->nrch * c->subslot, nmax = c->maxp / frame;
+        if (nmax > FRAMES_MAX) nmax = FRAMES_MAX;
+        if (nmax < FRAMES || nmax * frame > PKT_MAX || !fifo(nmax * frame)) {set_state(ST_BIG); c->step = R_MIDI; break;}
+        c->nmax = (uint8_t)nmax;
         c->step = R_ITF;
         break;
     }
@@ -224,13 +243,36 @@ uint8_t host_requests(void *phost)
         }
         r = ctl_req(phost, c->rate, 4u);
         if (r == USBH_BUSY) break;
-        c->step = R_OPEN;
+        c->step = c->fu ? R_MUTE : R_OPEN;
+        break;
+    case R_MUTE:   /* the stream's feature unit, master channel: mute off, then volume 0 dB (as a computer does) */
+    case R_VOL:
+        if (P8(phost, REQ_STATE) == 1u) {
+            c->ctl[0] = 0; c->ctl[1] = 0;
+            P8(phost, SETUP) = 0x21u; P8(phost, SETUP + 1u) = 0x01u;
+            P16(phost, SETUP + 2u) = c->step == R_MUTE ? 0x0100u : 0x0200u;
+            P16(phost, SETUP + 4u) = (uint16_t)(c->fu << 8 | c->ac_itf);
+            P16(phost, SETUP + 6u) = c->step == R_MUTE ? 1u : 2u;
+        }
+        r = ctl_req(phost, c->ctl, c->step == R_MUTE ? 1u : 2u);
+        if (r == USBH_BUSY) break;
+        c->step = c->step == R_MUTE ? R_VOL : R_OPEN;   /* a stall (no such control) is fine */
         break;
     case R_OPEN:
         c->pipe = alloc_pipe(phost, c->ep);
         if (c->pipe == 0xffu) {set_state(ST_ERROR); c->step = R_MIDI; break;}
         open_pipe(phost, c->pipe, c->ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u /* isochronous */, c->maxp);
-        fill(c, LINE->mode);
+        if (c->fb_ep) {
+            c->fb_pipe = alloc_pipe(phost, c->fb_ep);
+            if (c->fb_pipe != 0xffu) {
+                open_pipe(phost, c->fb_pipe, c->fb_ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u, c->fb_size);
+                c->fb_open = 1;
+            }
+        }
+        c->fb = FRAMES << 16;
+        c->acc = 0;
+        c->phase = 0;
+        fill(c, LINE->mode, FRAMES);
         c->open = 1;
         set_state(ST_SEND);
         LINE->pkts = PK_NOSOF;   /* until the first second of SOFs */
@@ -243,17 +285,39 @@ uint8_t host_requests(void *phost)
     return USBH_BUSY;
 }
 
-/* SOF interrupt, every 1 ms: the next packet once the last one is out. */
+/* Feedback (async sink): frames per ms, 10.14 in 3 bytes at full speed
+ * (16.16 in 4); taken when it is near 48. Then the next read. */
+static void feedback(void *phost, struct host_ctx *c)
+{
+    unsigned st = c->fb_inflight ? urb_state(phost, c->fb_pipe) : 1u;
+    if (c->fb_inflight && st == URB_IDLE) return;
+    if (c->fb_inflight && st == 1u) {
+        uint32_t v = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
+        v = c->fb_size == 3u ? v << 2 : v | (uint32_t)c->fb_buf[3] << 24;
+        if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;}
+    }
+    submit_urb(phost, c->fb_pipe, 1 /* in */, 1u /* isochronous */, 1u /* data */, c->fb_buf, c->fb_size, 0);
+    c->fb_inflight = 1;
+}
+
+/* SOF interrupt, every 1 ms: the next packet once the last one is out, with
+ * as many frames as the feedback asks (48 without feedback). */
 uint8_t host_sof(void *phost)
 {
     struct host_ctx *c = ctx();
     unsigned mode = LINE->mode;
     if (c && c->open && mode >= 1u && mode <= 3u) {
+        if (c->fb_open) feedback(phost, c);
         unsigned st = c->inflight ? urb_state(phost, c->pipe) : 1u;
         if (c->inflight && st == URB_IDLE) c->late++;
         else {
             if (c->inflight) {if (st == 1u) c->done++; else {c->bad++; c->last_bad = st;}}
-            if (c->fill_mode != mode) fill(c, mode);
+            c->acc += c->fb;
+            unsigned n = c->acc >> 16;
+            c->acc -= n << 16;
+            if (n > c->nmax) n = c->nmax;
+            if (n < FRAMES - 1u) n = FRAMES - 1u;
+            fill(c, mode, n);
             submit_urb(phost, c->pipe, 0 /* out */, 1u /* isochronous */, 1u /* data */, c->pkt, c->len, 0);
             c->inflight = 1;
             c->sent++;
@@ -289,6 +353,7 @@ uint8_t host_deinit(void *phost)
     if (c) {
         l->ctx = 0;   /* the SOF interrupt sees no context from here on */
         if (c->open) {close_pipe(phost, c->pipe); free_pipe(phost, c->pipe);}
+        if (c->fb_open) {close_pipe(phost, c->fb_pipe); free_pipe(phost, c->fb_pipe);}
         c->magic = 0;
         port_free(c);
     }

@@ -4,7 +4,9 @@ Needs libusb and pyusb:  brew install libusb && python3 -m pip install pyusb
 Run:                     python3 tools/usb_audio_desc.py
 Shows per streaming interface: UAC1 or UAC2, channels, bytes per sample
 (subslot), bit resolution, sample rates (UAC1), endpoint, sync type, max
-packet and interval. Only reads descriptors; changes nothing on the device.
+packet and interval. For a high-speed device also its full-speed
+configuration (what a full-speed host such as the bluebox DEV port sees).
+Only reads descriptors; changes nothing on the device.
 """
 import sys
 try:
@@ -58,15 +60,34 @@ def parse(cfg):
     return out
 
 
+def config(dev, kind):
+    """Config descriptor (kind 2) or other-speed config (kind 7), three tries."""
+    for _ in range(3):
+        try:
+            raw = bytes(dev.ctrl_transfer(0x80, 6, kind << 8, 0, 9))
+            return bytes(dev.ctrl_transfer(0x80, 6, kind << 8, 0, raw[2] | raw[3] << 8))
+        except Exception as e:
+            err = e
+    raise err
+
+
+def is_audio(cfg):
+    i = 0
+    while i + 5 < len(cfg) and cfg[i] >= 2:
+        if cfg[i + 1] == 4 and cfg[i + 5] == 1:
+            return True
+        i += cfg[i]
+    return False
+
+
 found = False
 for dev in usb.core.find(find_all=True):
     try:
-        raw = bytes(dev.ctrl_transfer(0x80, 6, 0x0200, 0, 9))
-        total = raw[2] | raw[3] << 8
-        cfg = bytes(dev.ctrl_transfer(0x80, 6, 0x0200, 0, total))
+        cfg = config(dev, 2)
     except Exception as e:
+        print(f'\n{dev.idVendor:#06x}:{dev.idProduct:#06x}: descriptors not readable ({e})')
         continue
-    if not any(cfg[i + 1] == 4 and cfg[i + 5] == 1 for i in range(len(cfg) - 5) if cfg[i] == 9):
+    if not is_audio(cfg):
         continue
     found = True
     try:
@@ -77,6 +98,13 @@ for dev in usb.core.find(find_all=True):
     print(f'\n{name}  VID {dev.idVendor:#06x} PID {dev.idProduct:#06x}, USB {dev.bcdUSB >> 8}.{(dev.bcdUSB >> 4) & 15}, '
           f'{speed} speed, class {dev.bDeviceClass:#x}')
     print('\n'.join(parse(cfg)))
-    print('  raw:', cfg.hex())
+    print(f'  raw ({len(cfg)} bytes):', cfg.hex())
+    if dev.speed == 3:
+        try:
+            fs = config(dev, 7)
+            print(f'  Full speed ({len(fs)} bytes):')
+            print('\n'.join('  ' + line for line in parse(fs)))
+        except Exception:
+            print('  Full speed: no other-speed configuration')
 if not found:
     print('No USB audio device found (is it plugged in, and is libusb installed?)')
