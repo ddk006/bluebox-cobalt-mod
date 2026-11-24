@@ -379,6 +379,7 @@ static void sc_request(unsigned program);
 static void pc_quicksave(uint32_t now);
 static void pc_autosave(int busy);
 static void pc_band_refresh(uint32_t now);
+static void pc_usb_page_refresh(void);
 static void pc_list_scroll(uint32_t now);
 static void mo_main(uint32_t now);
 #define MO_TO_USB 1u /* dump targets */
@@ -442,9 +443,11 @@ void pc_main(void *inputs) {
         if((u->dev_mode!=0u)!=(dev!=0u)){u->dev_state=dev?1u:0u;u->dev_ch=0;u->dev_pkts=0;} /* Waiting until a device starts */
         u->dev_mode=dev;
         unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u,pk=dev && u->dev_pkts<8u?u->dev_pkts:0u;
-        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_PKTS)!=pk)PC_TAG_SET(PC_SETTINGS,PC_DEV_PKTS,(int)pk);
-        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_STATE)!=st)PC_TAG_SET(PC_SETTINGS,PC_DEV_STATE,(int)st);
-        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_CH)!=ch)PC_TAG_SET(PC_SETTINGS,PC_DEV_CH,(int)ch);
+        int shown=0;
+        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_PKTS)!=pk){PC_TAG_SET(PC_SETTINGS,PC_DEV_PKTS,(int)pk);shown=1;}
+        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_STATE)!=st){PC_TAG_SET(PC_SETTINGS,PC_DEV_STATE,(int)st);shown=1;}
+        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_CH)!=ch){PC_TAG_SET(PC_SETTINGS,PC_DEV_CH,(int)ch);shown=1;}
+        if(shown)pc_usb_page_refresh();
     }
     if(s->want&PC_MSG){
         if(busy)s->want=0;
@@ -556,6 +559,17 @@ static void pc_open_scenes(void) {
 }
 static void pc_open_midi(void) {pc_post_ui(0xabu,PC_CELL_MIDI);}
 static void pc_open_usb(void) {pc_post_ui(0xabu,PC_CELL_USB);}
+/* The USB page is open: rebuild its rows (edit page +0xa3e2, the flag stock
+ * sets on value events; the next draw runs the row builder pc_page_rows) and
+ * ask for a screen flip, so DEV State/Ch/Pkts change while it is shown. */
+static void pc_usb_page_refresh(void) {
+    uint32_t app=PC_APP;
+    if(!pc_ram(app,0x150cb0u))return;
+    uint8_t *edit=(uint8_t *)(app+0x1e978u);
+    if(*(uint32_t *)(app+0x2b4u)!=(uint32_t)edit || *(uint16_t *)(edit+0xa3e0u)!=PC_CELL_USB)return;
+    edit[0xa3e2u]=1;
+    *(volatile uint8_t *)(app+0x2b9u)=1;
+}
 /* Crossfader page: the scene page's cell with F_PAGE 2 (rows: none; drawn
  * and touched by xf_draw / pc_touch). */
 static void pc_open_xf(int on) {

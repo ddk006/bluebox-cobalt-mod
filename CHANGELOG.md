@@ -12,7 +12,8 @@
   definition table 0x2ac records.
 - **DEV port audio, stage 1 (eurorack, experimental):** **DEV Audio** (Off /
   Sine 1-2 / Sine 3-4 / Sine all), **DEV State**, **DEV Ch** and **DEV Pkts**
-  (packet results per second) on the USB page. The MIDI host class
+  (packet results per second) on the USB page; the page rebuilds its rows
+  when they change (edit page flag +0xA3E2, as stock value events). The MIDI host class
   is wrapped (registration hook at 0x081056C6): with DEV Audio on it reads the
   device's config descriptor, selects its isochronous audio OUT stream
   (SET_INTERFACE, UAC2 SET_CUR 48 kHz), enlarges the periodic TX FIFO when

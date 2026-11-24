@@ -452,7 +452,7 @@
   {
    "old": "0x1e978",
    "new": "0x1e9e8",
-   "count": 11,
+   "count": 12,
    "why": "the edit/settings page inside the app object: desktop app ctor add r0,r4,#0x1e978 before bl 0x0813d070, euro add r0,r4,#0x1e9e8 before bl 0x0813fa08 (0x08135b7e); BlueLex euro checks page == app+0x1e9e8, kind 0xc at +0xa3e0 (same +0xa3e0 accesses on both)"
   },
   {
@@ -482,7 +482,7 @@
   {
    "old": "0x150cb0",
    "new": "0x1f5a08",
-   "count": 5,
+   "count": 6,
    "why": "app object size: the allocation literal after the app setup (desktop 0x0810d568 = 0x150cb0, euro 0x0810d728 = 0x1f5a08)"
   },
   {
@@ -494,7 +494,7 @@
   {
    "old": "0x119a88",
    "new": "0x1be7e0",
-   "count": 8,
+   "count": 9,
    "why": "Tools page in the app: desktop ldr r0,=0x119a88 before bl 0x0813140c, euro add #0x1be000 + #0x7e0 before bl 0x081324cc (mapped constructor)"
   }
  ],
