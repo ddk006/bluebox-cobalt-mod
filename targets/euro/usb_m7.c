@@ -113,6 +113,12 @@ static void apply(uint32_t m)
  * line (USB_STATE spare: last beat, its time, beats in a row). */
 #define DEV_LINE ((volatile uint32_t *)0x38800ee0u)   /* struct pc_usb: +0x18 the ring address | heartbeat */
 #define DEV_BEATS 4u
+#define DEV_MODE_RING 5u   /* DEV Audio "Ring test": a 1 kHz sine (-12 dBFS) instead of the audio, on every routed channel */
+static const int16_t dev_sine[48] = {
+    0, 1069, 2120, 3135, 4096, 4987, 5793, 6498, 7094, 7568, 7913, 8122,
+    8192, 8122, 7913, 7568, 7094, 6498, 5793, 4987, 4096, 3135, 2120, 1069,
+    0, -1069, -2120, -3135, -4096, -4987, -5793, -6498, -7094, -7568, -7913, -8122,
+    -8192, -8122, -7913, -7568, -7094, -6498, -5793, -4987, -4096, -3135, -2120, -1069};
 #define DEV_BEAT_MS 50u
 static void dev_feed(const uint8_t *src, int bytes)
 {
@@ -136,13 +142,16 @@ static void dev_feed(const uint8_t *src, int bytes)
     uint8_t route[DEV_OUTS];
     for (unsigned k = 0; k < DEV_OUTS; k++) route[k] = r->route[k] <= DEV_SRC ? r->route[k] : 0u;
     unsigned frames = (unsigned)bytes / FRAME_ALL, wr = r->wr % size;
+    int test = DEV_LINE[3] == DEV_MODE_RING;   /* struct pc_usb dev_mode */
+    unsigned ph = r->spare1[0] % 48u;          /* line 1 is this core's */
     for (unsigned i = 0; i < frames; i++) {
         const uint8_t *f = src + i * FRAME_ALL;
         int16_t *d = &r->data[wr * DEV_OUTS];
         for (unsigned k = 0; k < DEV_OUTS; k++) {
             unsigned c = route[k] - 1u;
-            d[k] = route[k] ? (int16_t)(f[3 * c + 1] | f[3 * c + 2] << 8) : 0;
+            d[k] = !route[k] ? 0 : test ? dev_sine[ph] : (int16_t)(f[3 * c + 1] | f[3 * c + 2] << 8);
         }
+        ph = ph + 1u == 48u ? 0u : ph + 1u;
         SCB_DCCMVAC = (uint32_t)d;
         SCB_DCCMVAC = (uint32_t)d + DEV_OUTS * 2u - 1u;
         wr = wr + 1u == size ? 0u : wr + 1u;
@@ -150,6 +159,7 @@ static void dev_feed(const uint8_t *src, int bytes)
     __asm volatile("dsb" ::: "memory");   /* the data before the write position */
     r->wr = wr;
     r->blocks++;
+    r->spare1[0] = ph;
     SCB_DCCMVAC = (uint32_t)&r->wr;
     __asm volatile("dsb" ::: "memory");
 }

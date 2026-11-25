@@ -122,5 +122,9 @@ w32(u,DR+8,256);clock[0]=100;push(3,dt=0)
 check(u32(u,DR+0x20)==8,'the clock went back (this core restarted): beats start over, nothing written')
 w32(u,DR+0x20,255);push(4);push(5);push(6)   # beats 2-4 since the restart
 check(u32(u,DR+0x20)==1 and bytes(u.mem_read(DR+64+255*20,20))==routed(),'the write position wraps at the ring size (256 frames)')
+w32(u,OUT+0xc,5);push(7)   # DEV Audio Ring test
+v=[struct.unpack_from('<10h',u.mem_read(DR+64+((1+j)%256)*20,20)) for j in range(2)]
+check(v[0][0]==v[0][2] and v[0][1]==0 and abs(v[1][0]-v[0][0])<1100 and v[0][0]!=0x4100 and u32(u,DR+0x20)==3,'Ring test: the M7 writes a 1 kHz sine on every routed channel (DEV 2 Off stays silent), phase running on')
+w32(u,OUT+0xc,0)
 w32(u,OUT+0x18,0)
 print(H.checks,'USB Out checks passed')

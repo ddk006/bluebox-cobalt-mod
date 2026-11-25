@@ -11,7 +11,8 @@
   or 96 when the heap is short; context and ring 7.4 KB, allocated once per
   boot) while the M4 driver's heartbeat runs; the driver keeps it half full
   and skips or doubles one frame now and then. "No memory" shows the free
-  heap in DEV FB raw. DEV Pkts "OK, no input" / "OK, gaps".
+  heap in DEV FB raw. DEV Audio "Ring test": the M7 writes a 1 kHz sine
+  into the ring instead (checks that path alone). DEV Pkts "OK, no input" / "OK, gaps".
   Settings capacity 192, definition table 0x2bb records.
 - **X-Fade CV against noise (eurorack):** the CV is low-pass filtered and
   moves the fader only once it leaves a hysteresis band of 1.5 steps; the

@@ -261,6 +261,10 @@ for i in range(25000):
     feed(47 if i%150==0 else 48);call(u,F['host_sof'],PHOST)
     if i%1000==999:seen.add(u32(u,LINE+0x1c))
 check(seen=={1},'and 140 ppm slow: held by doubling frames, no gap')
+w32(u,LINE+0xc,5);del sent[:]
+for i in range(3):feed(48);call(u,F['host_sof'],PHOST)
+check(len(data())==3 and all(len(x[4]) in (960,980) for x in data()) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Ring test: streams from the ring as Audio (the M7 writes the sine)')
+w32(u,LINE+0xc,4)
 call(u,F['host_deinit'],PHOST)
 ROUTE[0x2b2]=2;ROUTE[0x2b3]=3
 
