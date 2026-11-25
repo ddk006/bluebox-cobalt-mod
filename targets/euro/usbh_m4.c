@@ -69,10 +69,12 @@ enum {ST_OFF, ST_WAIT, ST_NOAUDIO, ST_START, ST_SEND, ST_ERROR, ST_NOMEM, ST_BIG
 /* Shared with src/pc_m4.c (struct pc_usb): M4 only, the M7 reads magic/mask/format. */
 struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts;};
 /* mode: 0 Off, 1 sine on 1-2, 2 on 3-4, 3 on all. pkts ("DEV Pkts:"), per second: */
-enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD};
+enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD,
+      PK_FBEMPTY, PK_FB44, PK_FB96};
 /* PK_OK with a feedback endpoint: packets out and the device's feedback near 48
- * (it runs the stream); PK_NOFB packets out but no feedback answer; PK_FBODD
- * answers far from 48 (or empty). */
+ * (it runs the stream at 48 kHz); PK_NOFB packets out but no feedback answer;
+ * PK_FBEMPTY answers of 0 (or empty); PK_FB44 / PK_FB96 the device runs at
+ * 44.1 / 88.2-96 kHz; PK_FBODD any other value. */
 #define LINE ((volatile struct host_line *)0x38800ee0u)
 _Static_assert(sizeof(struct host_line) == 32, "the 0xee0 line");
 
@@ -90,7 +92,8 @@ struct host_ctx {
     uint32_t done, bad, last_bad, sofs, fill_mode;
     uint8_t fu, fb_ep, fb_pipe, fb_open, fb_inflight, fb_size, nmax, phase;
     uint32_t fb, acc, fb_seen;   /* frames per ms, 16.16; feedback answers near 48 this second */
-    uint32_t fb_odd;             /* answers far from 48 (or empty) this second */
+    uint32_t fb_odd, fb_empty;   /* answers far from 48, answers of 0, this second */
+    uint32_t fb_k;               /* frames per ms of the last answer far from 48 */
     uint8_t fb_buf[4], ctl[4];
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
@@ -289,16 +292,29 @@ uint8_t host_requests(void *phost)
     return USBH_BUSY;
 }
 
-/* Feedback (async sink): frames per ms, 10.14 in 3 bytes at full speed
- * (16.16 in 4); taken when it is near 48. Then the next read. */
+/* Feedback (async sink): frames per ms. Full speed is 10.14 in 3 bytes, but
+ * some devices send 16.16 per frame or per 125 us microframe (Linux gadgets
+ * of some versions): the first reading that lands in 40-100 frames counts.
+ * Taken when it is near 48. Then the next read. */
+static uint32_t fb_decode(uint32_t raw, unsigned size)
+{
+    uint32_t c[3] = {size == 3u ? raw << 2 : raw, size == 3u ? raw : raw << 3, raw << 3};
+    for (unsigned i = 0; i < 3u; i++)
+        if (c[i] >= 40u << 16 && c[i] <= 100u << 16) return c[i];
+    return 0;
+}
+
 static void feedback(void *phost, struct host_ctx *c)
 {
     unsigned st = c->fb_inflight ? urb_state(phost, c->fb_pipe) : 1u;
     if (c->fb_inflight && st == URB_IDLE) return;
     if (c->fb_inflight && st == 1u) {
-        uint32_t v = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
-        v = c->fb_size == 3u ? v << 2 : v | (uint32_t)c->fb_buf[3] << 24;
-        if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;} else c->fb_odd++;
+        uint32_t raw = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
+        if (c->fb_size == 4u) raw |= (uint32_t)c->fb_buf[3] << 24;
+        uint32_t v = fb_decode(raw, c->fb_size);
+        if (!raw) c->fb_empty++;
+        else if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;}
+        else {c->fb_odd++; c->fb_k = (v + (1u << 15)) >> 16;}
     }
     for (unsigned i = 0; i < 4u; i++) c->fb_buf[i] = 0;   /* an empty answer reads as 0 */
     submit_urb(phost, c->fb_pipe, 1 /* in */, 1u /* isochronous */, 1u /* data */, c->fb_buf, c->fb_size, 0);
@@ -330,8 +346,10 @@ uint8_t host_sof(void *phost)
         if (++c->sofs >= 1000u) {   /* once a second: what happened to the packets */
             LINE->pkts = c->bad ? (c->last_bad >= 2u && c->last_bad <= 5u ? PK_NOTREADY + c->last_bad - 2u : PK_ERROR)
                        : !c->done ? PK_STUCK
-                       : !c->fb_open || c->fb_seen ? PK_OK : c->fb_odd ? PK_FBODD : PK_NOFB;
-            c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = 0;
+                       : !c->fb_open || c->fb_seen ? PK_OK
+                       : c->fb_odd ? (c->fb_k == 44u ? PK_FB44 : c->fb_k >= 88u && c->fb_k <= 96u ? PK_FB96 : PK_FBODD)
+                       : c->fb_empty ? PK_FBEMPTY : PK_NOFB;
+            c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = c->fb_empty = 0;
         }
     }
     return MIDI_PDATA || !c ? midi_sof(phost) : USBH_OK;

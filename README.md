@@ -389,7 +389,9 @@ than one full-speed packet), **DEV Ch** the device's channel count, **DEV Pkts**
 packets in the last second (OK, No SOF, Stuck, Not ready, NYET, Error, Stall;
 with a feedback endpoint OK also means the device answers it near 48 frames,
 that is, it runs the stream: "OK, no FB" packets out but no answer, "OK, FB
-odd" answers far from 48 or empty).
+empty" answers of 0, "OK, FB 44.1k" / "OK, FB 96k" the device runs at that
+rate, "OK, FB odd" any other value; 10.14 and 16.16 per frame or
+microframe are understood).
 The three update while the page is open. The port is full speed: at most
 1023 bytes per ms (10 channels of 16 bit fit). Like a computer, the bluebox
 unmutes the device's input and sets it to 0 dB, and follows the device's clock

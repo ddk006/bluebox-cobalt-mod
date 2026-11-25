@@ -137,8 +137,21 @@ w32(u,LINE+0xc,3);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
 check(all(sample(f,c)==sample(f,0) for f in range(48) for c in range(10)) and any(sample(f,9)==8192 for f in range(48)),'DEV Audio Sine all: the sine on all 10 channels')
 w32(u,LINE+0xc,1)
 fbval[0]=0
-for i in range(2000):call(u,F['host_sof'],PHOST)   # a whole window of feedback far from 48
-check(u32(u,LINE+0x1c)==9,'packets out, feedback answers far from 48 (or empty): DEV Pkts OK, FB odd')
+for i in range(2000):call(u,F['host_sof'],PHOST)   # a whole window of empty feedback
+check(u32(u,LINE+0x1c)==10,'packets out, feedback answers 0 (empty): DEV Pkts OK, FB empty')
+fbval[0]=0x1234
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==9,'feedback answers in no known format near a rate: DEV Pkts OK, FB odd')
+fbval[0]=int(44.1*(1<<14))
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==11,'feedback 44.1 frames (10.14): DEV Pkts OK, FB 44.1k')
+fbval[0]=96<<14
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==12,'feedback 96 frames: DEV Pkts OK, FB 96k')
+for val,fmt in ((48<<16,'16.16 per frame'),(6<<16,'16.16 per 125 us microframe')):
+    fbval[0]=val
+    for i in range(2000):call(u,F['host_sof'],PHOST)
+    check(u32(u,LINE+0x1c)==1,'feedback 48 frames as '+fmt+' (3 bytes) is understood too: DEV Pkts OK')
 fbst[0]=0
 for i in range(2000):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==8,'packets out, no feedback answer: DEV Pkts OK, no FB')

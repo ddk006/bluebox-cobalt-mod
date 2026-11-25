@@ -22,7 +22,9 @@
   and 0 dB on the stream's feature unit; the feedback endpoint (10.14 or
   16.16) sets 47-49 frames per packet, the sine phase runs on. DEV Pkts
   "OK, no FB" / "OK, FB odd" when the device does not answer its feedback
-  endpoint near 48 (it does not run the stream). The MIDI host class
+  endpoint near 48 (it does not run the stream); "OK, FB empty", "OK, FB
+  44.1k" and "OK, FB 96k" tell why. Feedback in 16.16 per frame or per
+  microframe (as some Linux gadgets send it) is understood too. The MIDI host class
   is wrapped (registration hook at 0x081056C6): with DEV Audio on it reads the
   device's config descriptor, selects its isochronous audio OUT stream
   (SET_INTERFACE, UAC2 SET_CUR 48 kHz), enlarges the periodic TX FIFO when
