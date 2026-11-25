@@ -127,6 +127,7 @@ struct host_ctx {
     uint8_t live, primed, hb, spare8;
     uint32_t ring;   /* the ring after this context (dev_ring.h) */
     uint32_t rd, avg, xruns, blocks_seen, slips;
+    uint32_t m7_frames;   /* the M7's frame count at the last second */
 };
 #define PKT2(c) ((c)->cfg)
 _Static_assert(CFG_MAX >= PKT_MAX, "cfg doubles as pkt2");
@@ -406,6 +407,7 @@ uint8_t host_requests(void *phost)
         c->rd = ring_of(c)->wr;   /* mode Audio: from what the M7 writes next */
         c->primed = 0;
         c->blocks_seen = ring_of(c)->blocks;
+        c->m7_frames = ring_of(c)->spare1[1];
         routes(c);
         c->open = 1;
         set_state(ST_SEND);
@@ -494,7 +496,9 @@ uint8_t host_sof(void *phost)
                        : c->xruns ? PK_XRUN : PK_OK;
             c->blocks_seen = blocks;
             c->xruns = 0;
-            LINE->channels = c->nrch | (c->fb_raw & 0xffffffu) << 8;   /* the USB page shows both */
+            uint32_t m7 = ring_of(c)->spare1[1];   /* mode Audio: "DEV FB raw:" shows the frames the M7 wrote this second (48000) */
+            LINE->channels = c->nrch | ((mode >= MODE_AUDIO ? m7 - c->m7_frames : c->fb_raw) & 0xffffffu) << 8;
+            c->m7_frames = m7;
             c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = c->fb_empty = 0;
         }
     }

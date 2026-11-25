@@ -160,6 +160,7 @@ static void dev_feed(const uint8_t *src, int bytes)
     r->wr = wr;
     r->blocks++;
     r->spare1[0] = ph;
+    r->spare1[1] += frames;
     SCB_DCCMVAC = (uint32_t)&r->wr;
     __asm volatile("dsb" ::: "memory");
 }

@@ -406,7 +406,8 @@ frames, or 160 or 96 when the heap is short); the driver keeps it half full
 and skips or doubles a frame now and then for the clock difference to the
 device. With "No memory" DEV FB raw shows the free heap in bytes. **Ring test**
 (DEV Audio) lets the M7 write a 1 kHz sine into the ring instead of the audio:
-it checks the M7 -> M4 path on its own. DEV Pkts then also says "OK, no input" (nothing
+it checks the M7 -> M4 path on its own. In Audio and Ring test, DEV FB raw shows
+the frames the M7 wrote in the last second (48000 at 48 kHz). DEV Pkts then also says "OK, no input" (nothing
 from the M7) or "OK, gaps" (the ring ran empty). Default Off: the port then works as stock. Code:
 `targets/euro/usbh_m4.c`.
 

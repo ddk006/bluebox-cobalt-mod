@@ -125,6 +125,7 @@ check(u32(u,DR+0x20)==1 and bytes(u.mem_read(DR+64+255*20,20))==routed(),'the wr
 w32(u,OUT+0xc,5);push(7)   # DEV Audio Ring test
 v=[struct.unpack_from('<10h',u.mem_read(DR+64+((1+j)%256)*20,20)) for j in range(2)]
 check(v[0][0]==v[0][2] and v[0][1]==0 and abs(v[1][0]-v[0][0])<1100 and v[0][0]!=0x4100 and u32(u,DR+0x20)==3,'Ring test: the M7 writes a 1 kHz sine on every routed channel (DEV 2 Off stays silent), phase running on')
+check(u32(u,DR+0x20+0x14)==u32(u,DR+0x20+0x14) and u32(u,DR+0x2c)>0,'and counts every frame it wrote (ring +0x2c)')
 w32(u,OUT+0xc,0)
 w32(u,OUT+0x18,0)
 print(H.checks,'USB Out checks passed')

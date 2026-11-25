@@ -220,7 +220,7 @@ call(u,F['host_deinit'],PHOST)
 def feed(n):   # the M7 writes n frames as routed (ring +12): source s of frame k is s*100 + k % 50
     wr=u32(u,RING+0x20);k0=feed.k;rt=bytes(u.mem_read(RING+12,10))
     for j in range(n):u.mem_write(RING+64+((wr+j)%256)*20,struct.pack('<10h',*[s*100+(k0+j)%50 if s else 0 for s in rt]))
-    feed.k+=n;w32(u,RING+0x20,(wr+n)%256);w32(u,RING+0x24,u32(u,RING+0x24)+1)
+    feed.k+=n;w32(u,RING+0x20,(wr+n)%256);w32(u,RING+0x24,u32(u,RING+0x24)+1);w32(u,RING+0x24+8,u32(u,RING+0x24+8)+n)
 feed.k=0
 ROUTE[0x2b2]=0;ROUTE[0x2b3]=15   # DEV 2 Off, DEV 3 Bus 1
 reset(4);call(u,F['host_init'],PHOST);r,n=requests();urb[0]=1
@@ -244,7 +244,7 @@ del sent[:];feed(48);call(u,F['host_sof'],PHOST);p=data()[0][4]
 check(u.mem_read(RING+12,1)[0]==13 and smp(p,47,0)//100==13,'a route changed on the USB page (DEV 1 Main L) reaches the M7 within 100 ms')
 ROUTE[0x2b1]=1
 for i in range(2000):feed(48);call(u,F['host_sof'],PHOST)
-check(u32(u,LINE+0x1c)==1,'a second of steady stream: DEV Pkts OK')
+check(u32(u,LINE+0x1c)==1 and u32(u,LINE+0x14)>>8==48000,'a second of steady stream: DEV Pkts OK, DEV FB raw shows the 48000 frames the M7 wrote')
 for i in range(2000):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==13,'no blocks from the M7 for a second: DEV Pkts OK, no input')
 for i in range(2000):feed(40);call(u,F['host_sof'],PHOST)
