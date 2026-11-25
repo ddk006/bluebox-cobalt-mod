@@ -88,7 +88,7 @@
   "PC map name table size",
   "PC map rename follows name",
   "PC map crossfader page touch",
-  "PC map settings capacity 68 to 176",
+  "PC map settings capacity 68 to 192",
   "PC map settings defaults",
   "PROJ Save assigns the chosen Bank #",
   "PROJ list marks the loaded project",
@@ -311,8 +311,8 @@
     "why": "the euro settings.tml has six stock tags (0x80, 0x81, 0x206, 0x209, 0x20a, 0x117), the desktop seven"
    },
    {
-    "old": "len(saved)==7+SLOTS+34",
-    "new": "len(saved)==6+SLOTS+34",
+    "old": "len(saved)==7+SLOTS+44",
+    "new": "len(saved)==6+SLOTS+44",
     "count": 1,
     "why": "the euro settings.tml has six stock tags"
    },

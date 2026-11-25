@@ -24,6 +24,7 @@
  * (github.com/lexnels/bluelex-bluebox-euro, src/usb_m7.c) found the same
  * places for its 2-channel mode and was the cross-check. */
 #include "shared.h"
+#include "dev_ring.h"
 
 #define FN(a) ((a) | 1u)
 #define fw_ring_write ((int (*)(void *, uint8_t *, int))FN(0x08066750u))
@@ -104,10 +105,54 @@ static void apply(uint32_t m)
     state()->cur = m;
 }
 
-/* bl 0x08066750 at 0x0804115a: (ring, block, bytes). Keep the chosen channels
- * (at 16 bit the upper two bytes of each little-endian 24-bit sample). */
+/* DEV port audio (dev_ring.h): the block's 18 channels as 16 bit into the
+ * M4's ring while its heartbeat runs. The heartbeat (low bits of the ring
+ * address in the USB line) counts only when it changed at most 50 ms ago;
+ * four changes in a row are needed, so neither a stale address in backup SRAM
+ * after a reset nor one late change is written to. Kept in this core's own
+ * line (USB_STATE spare: last beat, its time, beats in a row). */
+#define DEV_LINE ((volatile uint32_t *)0x38800ee0u)   /* struct pc_usb: +0x18 the ring address | heartbeat */
+#define DEV_BEATS 4u
+#define DEV_BEAT_MS 50u
+static void dev_feed(const uint8_t *src, int bytes)
+{
+    SCB_DCIMVAC = 0x38800ee0u;
+    __asm volatile("dsb\nisb" ::: "memory");
+    uint32_t a = DEV_LINE[6], hb = a & DEV_HB_MASK, now = fw_ms();
+    volatile struct usb_state *s = state();
+    uint32_t last = s->spare[0], t = s->spare[1], n = s->spare[2];
+    if (now < t || now - t > DEV_BEAT_MS) n = 0;   /* no beat lately, or this core restarted */
+    if (hb != last) {s->spare[0] = hb; s->spare[1] = now; if (n < DEV_BEATS) n++;}
+    s->spare[2] = n;
+    if (n < DEV_BEATS) return;
+    a &= ~31u;
+    if (a < DEV_RAM_LO || a > DEV_RAM_HI - sizeof(struct dev_ring)) return;
+    struct dev_ring *r = (struct dev_ring *)a;
+    SCB_DCIMVAC = a;   /* line 0 is the M4's */
+    __asm volatile("dsb\nisb" ::: "memory");
+    if (r->magic != DEV_RING_MAGIC) return;
+    unsigned frames = (unsigned)bytes / FRAME_ALL, wr = r->wr % DEV_RING_FRAMES;
+    for (unsigned i = 0; i < frames; i++) {
+        const uint8_t *f = src + i * FRAME_ALL;
+        int16_t *d = &r->data[wr * DEV_SRC];
+        for (unsigned c = 0; c < DEV_SRC; c++) d[c] = (int16_t)(f[3 * c + 1] | f[3 * c + 2] << 8);
+        SCB_DCCMVAC = (uint32_t)d;
+        SCB_DCCMVAC = (uint32_t)d + DEV_SRC * 2u - 1u;
+        wr = wr + 1u == DEV_RING_FRAMES ? 0u : wr + 1u;
+    }
+    __asm volatile("dsb" ::: "memory");   /* the data before the write position */
+    r->wr = wr;
+    r->blocks++;
+    SCB_DCCMVAC = (uint32_t)&r->wr;
+    __asm volatile("dsb" ::: "memory");
+}
+
+/* bl 0x08066750 at 0x0804115a: (ring, block, bytes). First the DEV port copy;
+ * then keep the chosen channels (at 16 bit the upper two bytes of each
+ * little-endian 24-bit sample). */
 int usb_push(struct usb_ring *r, uint8_t *src, int bytes)
 {
+    dev_feed(src, bytes);
     uint32_t m = current();
     if (m != ALL) {
         unsigned f = (unsigned)bytes / FRAME_ALL;

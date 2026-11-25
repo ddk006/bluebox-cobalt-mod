@@ -16,11 +16,14 @@ F={f[2]:int(f[0],16) for line in SYMS.read_text().splitlines() if len(f:=line.sp
 
 u=machine(cpu_model=UC_CPU_ARM_CORTEX_M4);u.mem_map(0x40080000,0x1000)
 PHOST=0x3000ac28;LINE=0x38800ee0;PDATA=0x300000b4;OTG=0x40080000;HEAP=0x30030000
+RING=HEAP;RINGSZ=64+256*18*2;CTX=RING+RINGSZ   # the block: ring (dev_ring.h), then the context
 CLASS=0x30000098
 u.mem_write(CLASS,patched[0x0814fdc8-0x08040000:][:32])   # the .data image of the MIDI class
 reg=[];stub(u,0x0811d184,lambda u:(reg.append((u.reg_read(UC_ARM_REG_R0),u.reg_read(UC_ARM_REG_R1))),u.reg_write(UC_ARM_REG_R0,0)))
 stub(u,0x0811d100,lambda u:u.reg_write(UC_ARM_REG_R0,0));stub(u,0x0811d204,lambda u:u.reg_write(UC_ARM_REG_R0,0))   # USBH_Init, USBH_Start
+w32(u,LINE+0x18,0x30031003)   # a block address from before the reset
 call(u,0x081056b4)
+check(u32(u,LINE+0x18)==0,'boot (class registration): an old block address in backup SRAM is cleared')
 check(reg==[(PHOST,CLASS)] and [u32(u,CLASS+o) for o in (8,0xc,0x10,0x14,0x18)]==[F[n]|1 for n in ('host_init','host_deinit','host_requests','host_bgnd','host_sof')] and u32(u,CLASS+4)==1,'MX_USB_HOST_Init (stock, USBH_Init/Start stubbed): the MIDI class (code 1) is registered with Init, DeInit, Requests, Bgnd and SOF going through the wrappers')
 
 def d(*b):return bytes([len(b)+1,*b])
@@ -70,6 +73,8 @@ stub(u,0x08105894,submit)
 stub(u,0x081058ce,lambda u:r0(u,urb[0] if u.reg_read(UC_ARM_REG_R1) in OUTP else fbst[0]))
 stub(u,0x08105838,lambda u:r0(u,3))   # last transfer size: the feedback answer's 3 bytes
 stub(u,0x0811b94a,lambda u:r0(u,0))
+ROUTE={0x2b1+i:(i+1 if i<8 else i+5) for i in range(10)}   # the defaults: DEV 1-8 Track 1-8, DEV 9/10 Main L/R
+stub(u,0x08120588,lambda u:r0(u,ROUTE.get(u.reg_read(UC_ARM_REG_R1),0)&0xffffffff))
 stub(u,0x0811ba90,lambda u:r0(u,heap[0]))
 stub(u,0x0811bbc8,lambda u:(frees.append(u.reg_read(UC_ARM_REG_R0))))
 def reset(mode,**kw):
@@ -88,16 +93,15 @@ SINE=list(struct.unpack('<48h',patched[F['sine48']-0x08040000:][:96]))   # the d
 check(all(abs(SINE[k]-8192*math.sin(2*math.pi*k/48))<1.5 for k in range(48)),'sine table: one cycle of 1 kHz at 48 kHz, -12 dBFS')
 
 # Off: the stock MIDI class, nothing else.
-w32(u,LINE+0x18,HEAP);w32(u,HEAP,0x48535431)   # a context left from an earlier boot
 reset(0);midi_ret[0]=2
-check(call(u,F['host_init'],PHOST)==2 and log==['midi_init'] and u32(u,LINE+0x18)==0,'DEV Audio Off: Init is MIDI Init (its result, here no MIDI), the old context pointer cleared')
+check(call(u,F['host_init'],PHOST)==2 and log==['midi_init'] and u32(u,LINE+0x18)==0,'DEV Audio Off: Init is MIDI Init (its result, here no MIDI), no block taken')
 midi_ret[0]=0;reset(0);call(u,F['host_init'],PHOST);del log[:]
 check(call(u,F['host_requests'],PHOST)==0 and call(u,F['host_sof'],PHOST)==0 and call(u,F['host_bgnd'],PHOST)==0 and call(u,F['host_deinit'],PHOST)==0 and log==['midi_req','midi_sof','midi_bgnd','midi_deinit'] and not sent,'DEV Audio Off: Requests, SOF, Bgnd and DeInit are the MIDI ones, nothing sent')
 
 # On, a device like the S-4 at full speed: MIDI, 10 channels of 16 bit host -> device,
 # feature unit 5 on the stream, feedback endpoint 0x85 (3 bytes, 10.14).
 reset(1)
-check(call(u,F['host_init'],PHOST)==0 and log==['midi_init'] and u32(u,LINE+0x18)==HEAP and state()==(3,0),'DEV Audio On: MIDI Init, then a context from the FreeRTOS heap; state Starting')
+check(call(u,F['host_init'],PHOST)==0 and log==['midi_init'] and u32(u,LINE+0x18)==RING and u32(u,RING)==0x52564544 and u32(u,RING+4)==CTX and u32(u,CTX)==0x48535431 and state()==(3,0),'DEV Audio On: MIDI Init, then one block from the FreeRTOS heap (ring "DEVR" pointing at the context after it); state Starting')
 r,n=requests()
 check(r==0 and ('get_desc',0x0200,len(DEV[0])) in log,'Requests: reads the whole config descriptor ('+str(len(DEV[0]))+' bytes) and ends with OK after '+str(n)+' calls')
 check(setups[0]==(bytes.fromhex('010b010004000000'),b''),'SET_INTERFACE: interface 4, alternate 1')
@@ -117,9 +121,9 @@ check(log==['midi_sof'],'SOF: MIDI SOF still runs')
 call(u,F['host_sof'],PHOST)
 check(len(data())==2 and [x[0] for x in data()]==[3,6] and [x[0] for x in fbreads()]==[4,7],'next SOF: the packet goes on the second pipe (the first one is still on its way: the core sends in the next frame), the feedback read too')
 call(u,F['host_sof'],PHOST)
-check(len(data())==2 and u32(u,HEAP+0x18)==1,'third SOF with the first pipe not back (URB idle): skipped and counted')
+check(len(data())==2 and u32(u,CTX+0x18)==1,'third SOF with the first pipe not back (URB idle): skipped and counted')
 urb[0]=1;call(u,F['host_sof'],PHOST);call(u,F['host_sof'],PHOST)
-check(len(data())==4 and [x[0] for x in data()]==[3,6,3,6] and u32(u,HEAP+0x14)==4,'URB done: a packet every SOF, the pipes in turn')
+check(len(data())==4 and [x[0] for x in data()]==[3,6,3,6] and u32(u,CTX+0x14)==4,'URB done: a packet every SOF, the pipes in turn')
 check(u32(u,LINE+0x1c)==2,'DEV Pkts: No SOF until the first second is counted')
 for i in range(996):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==1,'after 1000 SOFs with the packets done: DEV Pkts OK')
@@ -178,7 +182,7 @@ check(log==['midi_bgnd'],'Bgnd: MIDI')
 n=len(sent);w32(u,LINE+0xc,0);call(u,F['host_sof'],PHOST);w32(u,LINE+0xc,1)
 check(len(sent)==n,'DEV Audio switched Off while sending: no more packets or feedback reads')
 del log[:];call(u,F['host_deinit'],PHOST)
-check(all(('close_pipe',q) in log and ('free_pipe',q) in log for q in OUTP+FBP) and frees==[HEAP] and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==0 and state()==(1,0) and u32(u,LINE+0x1c)==0,'DeInit: all four pipes closed and freed, context back to the heap, MIDI DeInit; state Waiting')
+check(all(('close_pipe',q) in log and ('free_pipe',q) in log for q in OUTP+FBP) and not frees and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==RING and state()==(1,0) and u32(u,LINE+0x1c)==0,'DeInit: all four pipes closed and freed, the block kept for the next device (the M7 may still be writing), MIDI DeInit; state Waiting')
 call(u,F['host_sof'],PHOST)
 check(len(sent)==n,'after DeInit the SOF sends nothing')
 
@@ -194,7 +198,7 @@ check(call(u,F['host_init'],PHOST)==0,'no MIDI on the device: Init still OK for 
 r,n=requests();del log[:];urb[0]=1;call(u,F['host_sof'],PHOST);call(u,F['host_bgnd'],PHOST)
 check(r==0 and state()==(4,10) and len(data())==1 and log==[],'audio only: sending, MIDI Requests/SOF/Bgnd not called')
 del log[:];call(u,F['host_deinit'],PHOST)
-check('midi_deinit' not in log and frees==[HEAP],'audio only: DeInit leaves MIDI DeInit out')
+check('midi_deinit' not in log and not frees,'audio only: DeInit leaves MIDI DeInit out')
 midi_ret[0]=0
 
 # MIDI controller without audio OUT.
@@ -209,11 +213,58 @@ p=data()[0][4]
 check(len(p)==288 and p[12*6:12*6+3]==bytes([0])+struct.pack('<h',8192) and u32(u,OTG+0x100)==0x00e00300,'3-byte subslots, 2 channels: 288-byte packets, sample in the upper two bytes; the stock FIFO is big enough')
 call(u,F['host_deinit'],PHOST)
 
+# Mode Audio: the M7's ring (18 sources of 16 bit per frame) routed to the device's channels.
+def feed(n):   # the M7 writes n frames: source s of frame k is s*100 + k % 50
+    wr=u32(u,RING+0x20);k0=feed.k
+    for j in range(n):u.mem_write(RING+64+((wr+j)%256)*36,struct.pack('<18h',*[s*100+(k0+j)%50 for s in range(1,19)]))
+    feed.k+=n;w32(u,RING+0x20,(wr+n)%256);w32(u,RING+0x24,u32(u,RING+0x24)+1)
+feed.k=0
+ROUTE[0x2b2]=0;ROUTE[0x2b3]=15   # DEV 2 Off, DEV 3 Bus 1
+reset(4);call(u,F['host_init'],PHOST);r,n=requests();urb[0]=1
+check(r==0 and state()==(4,10) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Audio: the stream opens as before, in the same block')
+del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
+check(len(p)==960 and p==bytes(960),'ring empty: a silent packet of 48 frames')
+feed(200);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
+def smp(p,f,ch):return struct.unpack_from('<h',p,(f*10+ch)*2)[0]
+check([smp(p,f,0) for f in (0,1,47)]==[100,101,147] and all(smp(p,f,1)==0 for f in range(48)) and smp(p,5,2)==1505 and smp(p,5,3)==405 and smp(p,5,8)==1305 and smp(p,5,9)==1405,'ring filled: DEV 1 Track 1, DEV 2 Off (silent), DEV 3 Bus 1, DEV 4 Track 4, DEV 9/10 Main L/R, frames in order')
+seq=[]
+for i in range(40):
+    feed(48);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4];seq+=[smp(p,f,0)-100 for f in range(len(p)//20)]
+check(all((seq[k+1]-seq[k])%50==1 for k in range(len(seq)-1)),'steady stream: frames follow on without a gap or a jump ('+str(len(seq))+' frames)')
+hb=set()
+for i in range(16):feed(48);call(u,F['host_sof'],PHOST);hb.add(u32(u,LINE+0x18)&7)
+check(len(hb)>=2 and all(u32(u,LINE+0x18)&~31==RING for _ in [0]),'heartbeat for the M7: the low bits of the ring address change every 8 ms')
+ROUTE[0x2b1]=13
+for i in range(100):feed(48);call(u,F['host_sof'],PHOST)
+del sent[:];feed(48);call(u,F['host_sof'],PHOST);p=data()[0][4]
+check(smp(p,0,0)//100==13,'a route changed on the USB page (DEV 1 Main L) is taken within 100 ms')
+ROUTE[0x2b1]=1
+for i in range(2000):feed(48);call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==1,'a second of steady stream: DEV Pkts OK')
+for i in range(2000):call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==13,'no blocks from the M7 for a second: DEV Pkts OK, no input')
+for i in range(2000):feed(40);call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==14,'the M7 gives less than the device takes: the ring runs empty, DEV Pkts OK, gaps')
+for i in range(3000):feed(48);call(u,F['host_sof'],PHOST)
+check(u32(u,LINE+0x1c)==1,'steady again: OK')
+seen=set()
+for i in range(25000):
+    feed(49 if i%150==0 else 48);call(u,F['host_sof'],PHOST)
+    if i%1000==999:seen.add(u32(u,LINE+0x1c))
+check(seen=={1},'the bluebox clock 140 ppm fast against the device (one frame more every 150 ms, 166 in all): the ring is held by skipping frames, no overrun, no gap')
+seen=set()
+for i in range(25000):
+    feed(47 if i%150==0 else 48);call(u,F['host_sof'],PHOST)
+    if i%1000==999:seen.add(u32(u,LINE+0x1c))
+check(seen=={1},'and 140 ppm slow: held by doubling frames, no gap')
+call(u,F['host_deinit'],PHOST)
+ROUTE[0x2b2]=2;ROUTE[0x2b3]=3
+
 # Too big for one full-speed packet, and no memory.
 reset(1,nrch=24,maxp=1023);call(u,F['host_init'],PHOST);r,n=requests()
 check(r==0 and state()==(7,24) and not setups,'24 channels: 2304 bytes per ms do not fit, state Too big, nothing selected')
 call(u,F['host_deinit'],PHOST)
-reset(1);heap[0]=0
+reset(1);w32(u,LINE+0x18,0);heap[0]=0   # a new boot
 check(call(u,F['host_init'],PHOST)==0 and state()==(6,0) and u32(u,LINE+0x18)==0,'no heap: state No memory, MIDI Init result returned')
 heap[0]=HEAP
 print(H.checks,'DEV port audio checks passed')

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **DEV port audio, stage 2 (eurorack):** DEV Audio **Audio** sends the
+  bluebox to the device on the DEV port: **DEV 1**-**DEV 10** (tags
+  0x2b1-0x2ba, keys `devout1`-`devout10`) route Track 1-12, Main L/R or
+  Bus 1-4 (or Off) to its channels; default Track 1-8, Main L/R. The M7
+  (usb_push) copies each block as 16 bit into a ring in the M4 heap
+  (`targets/euro/dev_ring.h`, 256 frames, allocated once per boot) while the
+  M4 driver's heartbeat runs; the driver keeps 128 frames in it and skips or
+  doubles one frame now and then. DEV Pkts "OK, no input" / "OK, gaps".
+  Settings capacity 192, definition table 0x2bb records.
 - **X-Fade CV against noise (eurorack):** the CV is low-pass filtered and
   moves the fader only once it leaves a hysteresis band of 1.5 steps; the
   outer 2 steps at each end give A or B. A resting, noisy CV no longer

@@ -397,7 +397,14 @@ answer as received, as a number (3 bytes little-endian: 786432 = 0x0C0000 is
 The three update while the page is open. The port is full speed: at most
 1023 bytes per ms (10 channels of 16 bit fit). Like a computer, the bluebox
 unmutes the device's input and sets it to 0 dB, and follows the device's clock
-feedback (47-49 frames per ms) when it has one. Default Off: the port then works as stock. Code:
+feedback (47-49 frames per ms) when it has one. **DEV Audio: Audio** sends the
+bluebox itself: **DEV 1** to **DEV 10** pick for each of the device's first ten
+channels a source (Off, Track 1-12, Main L/R, Bus 1-4 = the bluebox USB
+channels 1-18; default Track 1-8, Main L, Main R). The M7 copies every audio
+block into a ring in M4 memory (`targets/euro/dev_ring.h`); the driver keeps
+it about 2.7 ms full and skips or doubles a frame now and then for the clock
+difference to the device. DEV Pkts then also says "OK, no input" (nothing
+from the M7) or "OK, gaps" (the ring ran empty). Default Off: the port then works as stock. Code:
 `targets/euro/usbh_m4.c`.
 
 `tools/usb_audio_desc.py` prints the USB audio descriptors (channels, format,
