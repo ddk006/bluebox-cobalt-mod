@@ -68,6 +68,7 @@ enum {URB_IDLE};
 enum {ST_OFF, ST_WAIT, ST_NOAUDIO, ST_START, ST_SEND, ST_ERROR, ST_NOMEM, ST_BIG};
 /* Shared with src/pc_m4.c (struct pc_usb): M4 only, the M7 reads magic/mask/format. */
 struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts;};
+/* channels: bits 0-7 the channel count, 8-31 the last feedback answer ("DEV FB raw:"). */
 /* mode: 0 Off, 1 sine on 1-2, 2 on 3-4, 3 on all. pkts ("DEV Pkts:"), per second: */
 enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD,
       PK_FBEMPTY, PK_FB44, PK_FB96};
@@ -94,6 +95,7 @@ struct host_ctx {
     uint32_t fb, acc, fb_seen;   /* frames per ms, 16.16; feedback answers near 48 this second */
     uint32_t fb_odd, fb_empty;   /* answers far from 48, answers of 0, this second */
     uint32_t fb_k;               /* frames per ms of the last answer far from 48 */
+    uint32_t fb_raw;             /* the last answer as received ("DEV FB raw:") */
     uint8_t fb_buf[4], ctl[4];
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
@@ -312,6 +314,7 @@ static void feedback(void *phost, struct host_ctx *c)
         uint32_t raw = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
         if (c->fb_size == 4u) raw |= (uint32_t)c->fb_buf[3] << 24;
         uint32_t v = fb_decode(raw, c->fb_size);
+        c->fb_raw = raw;
         if (!raw) c->fb_empty++;
         else if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;}
         else {c->fb_odd++; c->fb_k = (v + (1u << 15)) >> 16;}
@@ -349,6 +352,7 @@ uint8_t host_sof(void *phost)
                        : !c->fb_open || c->fb_seen ? PK_OK
                        : c->fb_odd ? (c->fb_k == 44u ? PK_FB44 : c->fb_k >= 88u && c->fb_k <= 96u ? PK_FB96 : PK_FBODD)
                        : c->fb_empty ? PK_FBEMPTY : PK_NOFB;
+            LINE->channels = c->nrch | (c->fb_raw & 0xffffffu) << 8;   /* the USB page shows both */
             c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = c->fb_empty = 0;
         }
     }

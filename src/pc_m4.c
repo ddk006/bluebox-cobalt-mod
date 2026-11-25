@@ -49,13 +49,14 @@ static void xf_cv(uint32_t now);
 #define PC_DEV_STATE 0x2adu /* USB page "DEV State:" (key devstate): shown only, set from the driver */
 #define PC_DEV_CH 0x2aeu /* USB page "DEV Ch:" (key devch): the device's OUT channels, shown only */
 #define PC_DEV_PKTS 0x2afu /* USB page "DEV Pkts:" (key devpkts): last second's packet result, shown only */
-#define PC_LAST_TAG 0x2afu
+#define PC_DEV_FB 0x2b0u /* USB page "DEV FB raw:" (key devfb): the device's last feedback answer as received (bytes little-endian, 0..0xffffff), shown only */
+#define PC_LAST_TAG 0x2b0u
 #define PC_CV 0 /* CV inputs (eurorack): targets/euro.json sets 1; the desktop has none */
 #define PC_USB 0 /* USB audio channel choice (eurorack, targets/euro/usb_m7.c): targets/euro.json sets 1 */
 /* USB channels to send (bit n = USB n+1), written by the M4 for the M7: a
  * cache line of its own (the M7 caches backup SRAM and invalidates it before
  * reading). */
-struct pc_usb {uint32_t magic,mask,format,dev_mode,dev_state,dev_ch,dev_ctx,dev_pkts;}; /* format: 0 24 bit, 1 16 bit; dev_*: DEV port audio (targets/euro/usbh_m4.c, M4 only) */
+struct pc_usb {uint32_t magic,mask,format,dev_mode,dev_state,dev_ch,dev_ctx,dev_pkts;}; /* format: 0 24 bit, 1 16 bit; dev_*: DEV port audio (targets/euro/usbh_m4.c, M4 only); dev_ch: channels in bits 0-7, the last feedback answer in 8-31 */
 #define PC_USB_OUT ((volatile struct pc_usb *)0x38800ee0u)
 #define PC_USB_MAGIC 0x55534231u
 _Static_assert(sizeof(struct pc_usb)==32,"USB channel mask fills the 0xee0 cache line");
@@ -227,6 +228,7 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     static const char *const dev_pkts[13]={"-","OK","No SOF","Stuck","Not ready","NYET","Error","Stall","OK, no FB","OK, FB odd",
         "OK, FB empty","OK, FB 44.1k","OK, FB 96k"};
     def_enum(table,PC_DEV_PKTS,"DEV Pkts:",dev_pkts,13,"devpkts");
+    STOCK_DEF(table,PC_DEV_FB,1,"DEV FB raw:",0,0xffffff,"devfb");
     def_enum(table,PC_MIDI_ROW,"MIDI Settings",midi_open,1,"midimenu"); /* one value: turning does nothing */
     static const char *const din_out[3]={"Default","USB Thru","All Thru"};
     static const char *const cc_sync[4]={"Off","USB","USB+MIDI Out","MIDI Out"};
@@ -256,6 +258,7 @@ void pc_settings_defaults(void *set,unsigned id,int value) {
     STOCK_ADD(set,PC_DEV_STATE,0);
     STOCK_ADD(set,PC_DEV_CH,0);
     STOCK_ADD(set,PC_DEV_PKTS,0);
+    STOCK_ADD(set,PC_DEV_FB,0);
 }
 
 /* MIDI poll (TIM4 IRQ) at 0x0810341a: r0=status, r4=message (data1 at +1).
@@ -443,11 +446,12 @@ void pc_main(void *inputs) {
         unsigned dev=(unsigned)fw_get(PC_SETTINGS,PC_DEV_AUDIO);if(dev>3u)dev=0;
         if((u->dev_mode!=0u)!=(dev!=0u)){u->dev_state=dev?1u:0u;u->dev_ch=0;u->dev_pkts=0;} /* Waiting until a device starts */
         u->dev_mode=dev;
-        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && u->dev_ch<=32u?u->dev_ch:0u,pk=dev && u->dev_pkts<13u?u->dev_pkts:0u;
+        unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && (u->dev_ch&0xffu)<=32u?u->dev_ch&0xffu:0u,fb=dev?u->dev_ch>>8:0u,pk=dev && u->dev_pkts<13u?u->dev_pkts:0u;
         int shown=0;
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_PKTS)!=pk){PC_TAG_SET(PC_SETTINGS,PC_DEV_PKTS,(int)pk);shown=1;}
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_STATE)!=st){PC_TAG_SET(PC_SETTINGS,PC_DEV_STATE,(int)st);shown=1;}
         if((unsigned)fw_get(PC_SETTINGS,PC_DEV_CH)!=ch){PC_TAG_SET(PC_SETTINGS,PC_DEV_CH,(int)ch);shown=1;}
+        if((unsigned)fw_get(PC_SETTINGS,PC_DEV_FB)!=fb){PC_TAG_SET(PC_SETTINGS,PC_DEV_FB,(int)fb);shown=1;}
         if(shown)pc_usb_page_refresh();
     }
     if(s->want&PC_MSG){
@@ -625,6 +629,7 @@ int pc_page_rows(void *session,uint16_t *cell,void *list) {
         append(list,PC_DEV_STATE,fw_get(PC_SETTINGS,PC_DEV_STATE));
         append(list,PC_DEV_CH,fw_get(PC_SETTINGS,PC_DEV_CH));
         append(list,PC_DEV_PKTS,fw_get(PC_SETTINGS,PC_DEV_PKTS));
+        append(list,PC_DEV_FB,fw_get(PC_SETTINGS,PC_DEV_FB));
         for(unsigned i=0;i<PC_USB_N;i++)append(list,PC_USB_CH+i,fw_get(PC_SETTINGS,PC_USB_CH+i));
         return 1;
     }
@@ -659,7 +664,7 @@ void pc_knob(void *session,uint16_t *cell,unsigned id,int value,int extra) {
         }
         return;
     }
-    if(*cell==PC_CELL_USB && (id==PC_DEV_STATE || id==PC_DEV_CH || id==PC_DEV_PKTS))return; /* shown only */
+    if(*cell==PC_CELL_USB && (id==PC_DEV_STATE || id==PC_DEV_CH || id==PC_DEV_PKTS || id==PC_DEV_FB))return; /* shown only */
     if(*cell==PC_CELL_MIDI || *cell==PC_CELL_USB){
         uint16_t settings=0x18;
         knob(session,&settings,id,value,extra);

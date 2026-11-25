@@ -391,7 +391,9 @@ with a feedback endpoint OK also means the device answers it near 48 frames,
 that is, it runs the stream: "OK, no FB" packets out but no answer, "OK, FB
 empty" answers of 0, "OK, FB 44.1k" / "OK, FB 96k" the device runs at that
 rate, "OK, FB odd" any other value; 10.14 and 16.16 per frame or
-microframe are understood).
+microframe are understood). **DEV FB raw** shows the device's last feedback
+answer as received, as a number (3 bytes little-endian: 786432 = 0x0C0000 is
+48.0 frames in 10.14).
 The three update while the page is open. The port is full speed: at most
 1023 bytes per ms (10 channels of 16 bit fit). Like a computer, the bluebox
 unmutes the device's input and sets it to 0 dB, and follows the device's clock

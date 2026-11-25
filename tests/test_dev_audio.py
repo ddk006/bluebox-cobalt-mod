@@ -141,7 +141,7 @@ for i in range(2000):call(u,F['host_sof'],PHOST)   # a whole window of empty fee
 check(u32(u,LINE+0x1c)==10,'packets out, feedback answers 0 (empty): DEV Pkts OK, FB empty')
 fbval[0]=0x1234
 for i in range(2000):call(u,F['host_sof'],PHOST)
-check(u32(u,LINE+0x1c)==9,'feedback answers in no known format near a rate: DEV Pkts OK, FB odd')
+check(u32(u,LINE+0x1c)==9 and u32(u,LINE+0x14)==10|0x1234<<8,'feedback answers in no known format near a rate: DEV Pkts OK, FB odd; the raw answer next to the channel count (DEV FB raw)')
 fbval[0]=int(44.1*(1<<14))
 for i in range(2000):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==11,'feedback 44.1 frames (10.14): DEV Pkts OK, FB 44.1k')
