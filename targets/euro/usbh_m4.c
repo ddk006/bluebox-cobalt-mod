@@ -16,9 +16,10 @@
  * S-4's track 1) or all of them, the other channels silent. Each second the
  * packet results are summed up for the USB page ("DEV Pkts:").
  *
- * The packet goes through the periodic TX FIFO, 0xe0 words (896 bytes) after
- * the stock USB_HostInit (0x08117ac8, HS-core layout); a bigger packet moves
- * the non-periodic FIFO down to 0x80 words and gives the periodic one 0x100.
+ * The packets go through the periodic TX FIFO, 0xe0 words (896 bytes) after
+ * the stock USB_HostInit (0x08117ac8, HS-core layout); it has to hold two
+ * (two pipes in turn, see pipe2), so bigger ones shrink the RX FIFO to 0x100
+ * words and the non-periodic one to 0x80 and give the periodic one 0x200.
  * Buffers come from the FreeRTOS heap (pvPortMalloc 0x0811ba90) at Init and
  * go back at DeInit; the pointer and the state for the USB page sit in the
  * USB line of backup SRAM (0x38800ee0, struct pc_usb in src/pc_m4.c). */
@@ -41,6 +42,7 @@ typedef uint8_t (*cls_fn)(void *);
 #define free_pipe   ((uint8_t (*)(void *, uint8_t))FN(0x0811e004u))
 #define submit_urb  ((uint8_t (*)(void *, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t *, uint16_t, uint8_t))FN(0x08105894u))
 #define urb_state   ((uint8_t (*)(void *, uint8_t))FN(0x081058ceu))
+#define xfer_size   ((uint32_t (*)(void *, uint8_t))FN(0x08105838u))   /* USBH_LL_GetLastXferSize: HAL hc[pipe].xfer_count (+0x4c) */
 #define msg_put     ((int (*)(uint32_t, uint32_t, uint32_t))FN(0x0811b94au))
 #define port_malloc ((void *(*)(uint32_t))FN(0x0811ba90u))
 #define port_free   ((void (*)(void *))FN(0x0811bbc8u))
@@ -100,6 +102,15 @@ struct host_ctx {
     uint8_t rate[4];
     uint8_t cfg[CFG_MAX];
     uint8_t pkt[PKT_MAX];
+    /* The second pipe of each pair: the USB core sends an isochronous
+     * transfer in the frame after it is started (ODDFRM = next frame), so one
+     * pipe can only serve every other frame. Two pipes in turn serve every
+     * frame, as the device expects (a device may only take a packet in the
+     * frame it set up for it). Index 0 is pipe / inflight / pkt / fb_pipe /
+     * fb_inflight / fb_buf above, index 1 these. */
+    uint8_t pipe2, inflight2, fb_pipe2, fb_inflight2, cur, fb_cur, open2, fb_open2;
+    uint8_t fb_buf2[4];
+    uint8_t pkt2[PKT_MAX];
 };
 #define CTX_MAGIC 0x48535431u
 
@@ -164,9 +175,9 @@ static int parse(struct host_ctx *c, unsigned total)
 
 /* One packet of n frames: the sine (phase carried over) on the chosen
  * channels, in the top two bytes of each subslot; the rest 0. */
-static void fill(struct host_ctx *c, unsigned mode, unsigned n)
+static void fill(struct host_ctx *c, uint8_t *buf, unsigned mode, unsigned n)
 {
-    uint8_t *p = c->pkt;
+    uint8_t *p = buf;
     c->fill_mode = mode;
     unsigned ph = c->phase;
     for (unsigned f = 0; f < n; f++, ph = ph + 1u == FRAMES ? 0u : ph + 1u)
@@ -177,20 +188,29 @@ static void fill(struct host_ctx *c, unsigned mode, unsigned n)
             *p++ = (uint8_t)v; *p++ = (uint8_t)((uint16_t)v >> 8);
         }
     c->phase = (uint8_t)ph;
-    c->len = (uint16_t)(p - c->pkt);
+    c->len = (uint16_t)(p - buf);
 }
 
-/* Periodic TX FIFO deep enough for one packet (stock HS-core layout only). */
+/* Periodic TX FIFO deep enough for two packets (the one on the bus and the
+ * next, see pipe2), stock HS-core layout only: RX 0x200 words at 0, NPTX
+ * 0x100 at 0x200, PTX 0xe0 at 0x300 (0x3e0 words used). Then RX 0x100 at 0
+ * (1 KB: control, MIDI and feedback IN packets are 64 bytes at most), NPTX
+ * 0x80 at 0x100, PTX 0x200 (2 KB) at 0x180: 0x380 words, inside the stock
+ * use. Called while no transfer runs (between control requests, before MIDI
+ * starts its pipes); all FIFOs flushed. */
 static int fifo(unsigned bytes)
 {
-    unsigned need = (bytes + 3u) / 4u;
+    unsigned need = 2u * ((bytes + 3u) / 4u);
     if ((OTG[HPTXFSIZ] >> 16) >= need) return 1;
-    if (need > 0x100u || OTG[GRXFSIZ] != 0x200u || OTG[HNPTXFSIZ] != 0x01000200u) return 0;
-    OTG[HNPTXFSIZ] = 0x80u << 16 | 0x200u;
-    OTG[HPTXFSIZ] = 0x100u << 16 | 0x280u;
+    if (need > 0x200u || OTG[GRXFSIZ] != 0x200u || OTG[HNPTXFSIZ] != 0x01000200u) return 0;
+    OTG[GRXFSIZ] = 0x100u;
+    OTG[HNPTXFSIZ] = 0x80u << 16 | 0x100u;
+    OTG[HPTXFSIZ] = 0x200u << 16 | 0x180u;
     for (unsigned n = 0; n < 100000u && !(OTG[GRSTCTL] & 1u << 31); n++) {}   /* AHB idle, as USB_FlushTxFifo */
     OTG[GRSTCTL] = 0x10u << 6 | 1u << 5;   /* flush all TX FIFOs */
     for (unsigned n = 0; n < 100000u && (OTG[GRSTCTL] & 1u << 5); n++) {}
+    OTG[GRSTCTL] = 1u << 4;                /* flush the RX FIFO */
+    for (unsigned n = 0; n < 100000u && (OTG[GRSTCTL] & 1u << 4); n++) {}
     return 1;
 }
 
@@ -271,17 +291,26 @@ uint8_t host_requests(void *phost)
         c->pipe = alloc_pipe(phost, c->ep);
         if (c->pipe == 0xffu) {set_state(ST_ERROR); c->step = R_MIDI; break;}
         open_pipe(phost, c->pipe, c->ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u /* isochronous */, c->maxp);
+        c->pipe2 = alloc_pipe(phost, c->ep);
+        if (c->pipe2 != 0xffu) {
+            open_pipe(phost, c->pipe2, c->ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u, c->maxp);
+            c->open2 = 1;
+        }
         if (c->fb_ep) {
             c->fb_pipe = alloc_pipe(phost, c->fb_ep);
             if (c->fb_pipe != 0xffu) {
                 open_pipe(phost, c->fb_pipe, c->fb_ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u, c->fb_size);
                 c->fb_open = 1;
+                c->fb_pipe2 = alloc_pipe(phost, c->fb_ep);
+                if (c->fb_pipe2 != 0xffu) {
+                    open_pipe(phost, c->fb_pipe2, c->fb_ep, P8(phost, DEV_ADDR), P8(phost, DEV_SPEED), 1u, c->fb_size);
+                    c->fb_open2 = 1;
+                }
             }
         }
         c->fb = FRAMES << 16;
         c->acc = 0;
         c->phase = 0;
-        fill(c, LINE->mode, FRAMES);
         c->open = 1;
         set_state(ST_SEND);
         LINE->pkts = PK_NOSOF;   /* until the first second of SOFs */
@@ -308,20 +337,24 @@ static uint32_t fb_decode(uint32_t raw, unsigned size)
 
 static void feedback(void *phost, struct host_ctx *c)
 {
-    unsigned st = c->fb_inflight ? urb_state(phost, c->fb_pipe) : 1u;
-    if (c->fb_inflight && st == URB_IDLE) return;
-    if (c->fb_inflight && st == 1u) {
-        uint32_t raw = c->fb_buf[0] | c->fb_buf[1] << 8 | c->fb_buf[2] << 16;
-        if (c->fb_size == 4u) raw |= (uint32_t)c->fb_buf[3] << 24;
+    unsigned i = c->fb_open2 ? c->fb_cur : 0u;   /* the pipe of this frame */
+    uint8_t pipe = i ? c->fb_pipe2 : c->fb_pipe, *inflight = i ? &c->fb_inflight2 : &c->fb_inflight;
+    uint8_t *buf = i ? c->fb_buf2 : c->fb_buf;
+    unsigned st = *inflight ? urb_state(phost, pipe) : 1u;
+    if (*inflight && st == URB_IDLE) return;   /* not back yet: this frame is skipped, the pipe stays */
+    c->fb_cur = (uint8_t)(i ^ 1u);
+    if (*inflight && st == 1u) {
+        uint32_t raw = buf[0] | buf[1] << 8 | buf[2] << 16;
+        if (c->fb_size == 4u) raw |= (uint32_t)buf[3] << 24;
         uint32_t v = fb_decode(raw, c->fb_size);
         c->fb_raw = raw;
-        if (!raw) c->fb_empty++;
+        if (!raw || !xfer_size(phost, pipe)) c->fb_empty++;
         else if (v >= 46u << 16 && v <= 50u << 16) {c->fb = v; c->fb_seen++;}
         else {c->fb_odd++; c->fb_k = (v + (1u << 15)) >> 16;}
     }
-    for (unsigned i = 0; i < 4u; i++) c->fb_buf[i] = 0;   /* an empty answer reads as 0 */
-    submit_urb(phost, c->fb_pipe, 1 /* in */, 1u /* isochronous */, 1u /* data */, c->fb_buf, c->fb_size, 0);
-    c->fb_inflight = 1;
+    for (unsigned k = 0; k < 4u; k++) buf[k] = 0;   /* an empty answer reads as 0 */
+    submit_urb(phost, pipe, 1 /* in */, 1u /* isochronous */, 1u /* data */, buf, c->fb_size, 0);
+    *inflight = 1;
 }
 
 /* SOF interrupt, every 1 ms: the next packet once the last one is out, with
@@ -332,18 +365,22 @@ uint8_t host_sof(void *phost)
     unsigned mode = LINE->mode;
     if (c && c->open && mode >= 1u && mode <= 3u) {
         if (c->fb_open) feedback(phost, c);
-        unsigned st = c->inflight ? urb_state(phost, c->pipe) : 1u;
-        if (c->inflight && st == URB_IDLE) c->late++;
+        unsigned i = c->open2 ? c->cur : 0u;   /* pipes in turn, one per frame */
+        uint8_t pipe = i ? c->pipe2 : c->pipe, *inflight = i ? &c->inflight2 : &c->inflight;
+        uint8_t *buf = i ? c->pkt2 : c->pkt;
+        unsigned st = *inflight ? urb_state(phost, pipe) : 1u;
+        if (*inflight && st == URB_IDLE) c->late++;
         else {
-            if (c->inflight) {if (st == 1u) c->done++; else {c->bad++; c->last_bad = st;}}
+            c->cur = (uint8_t)(i ^ 1u);
+            if (*inflight) {if (st == 1u) c->done++; else {c->bad++; c->last_bad = st;}}
             c->acc += c->fb;
             unsigned n = c->acc >> 16;
             c->acc -= n << 16;
             if (n > c->nmax) n = c->nmax;
             if (n < FRAMES - 1u) n = FRAMES - 1u;
-            fill(c, mode, n);
-            submit_urb(phost, c->pipe, 0 /* out */, 1u /* isochronous */, 1u /* data */, c->pkt, c->len, 0);
-            c->inflight = 1;
+            fill(c, buf, mode, n);
+            submit_urb(phost, pipe, 0 /* out */, 1u /* isochronous */, 1u /* data */, buf, c->len, 0);
+            *inflight = 1;
             c->sent++;
         }
         if (++c->sofs >= 1000u) {   /* once a second: what happened to the packets */
@@ -381,7 +418,9 @@ uint8_t host_deinit(void *phost)
     if (c) {
         l->ctx = 0;   /* the SOF interrupt sees no context from here on */
         if (c->open) {close_pipe(phost, c->pipe); free_pipe(phost, c->pipe);}
+        if (c->open2) {close_pipe(phost, c->pipe2); free_pipe(phost, c->pipe2);}
         if (c->fb_open) {close_pipe(phost, c->fb_pipe); free_pipe(phost, c->fb_pipe);}
+        if (c->fb_open2) {close_pipe(phost, c->fb_pipe2); free_pipe(phost, c->fb_pipe2);}
         c->magic = 0;
         port_free(c);
     }

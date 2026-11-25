@@ -37,8 +37,10 @@ DEV=[cfg()]
 log=[];sent=[];setups=[];urb=[0];fbst=[1];fbval=[48<<14];frees=[];heap=[HEAP]
 def arg(u,n):return u32(u,u.reg_read(UC_ARM_REG_SP)+4*(n-4))
 def r0(u,v):u.reg_write(UC_ARM_REG_R0,v)
-def data():return [x for x in sent if x[0]==3]
-def fbreads():return [x for x in sent if x[0]==4]
+OUTP,FBP=(3,6),(4,7)   # two pipes each, used in turn (one per frame)
+def data():return [x for x in sent if x[0] in OUTP]
+def fbreads():return [x for x in sent if x[0] in FBP]
+allocs={}
 midi_ret=[0]
 def midi_init(u):log.append('midi_init');(w32(u,PDATA,0x3000b494) if midi_ret[0]==0 else None);r0(u,midi_ret[0])
 stub(u,0x08105990,midi_init)
@@ -53,7 +55,10 @@ stub(u,0x0811dbda,get_desc)
 def ctl(u):
     n=u.reg_read(UC_ARM_REG_R2);setups.append((bytes(u.mem_read(PHOST+0x10,8)),bytes(u.mem_read(u.reg_read(UC_ARM_REG_R1),n)) if n else b''));r0(u,0)
 stub(u,0x0811d8f2,ctl)
-stub(u,0x0811dfd2,lambda u:(log.append(('alloc_pipe',u.reg_read(UC_ARM_REG_R1))),r0(u,3 if u.reg_read(UC_ARM_REG_R1)==3 else 4)))
+def alloc(u):
+    ep=u.reg_read(UC_ARM_REG_R1);k=allocs.get(ep,0);allocs[ep]=k+1
+    log.append(('alloc_pipe',ep));r0(u,(OUTP if ep==3 else FBP)[k] if k<2 else 0xff)
+stub(u,0x0811dfd2,alloc)
 stub(u,0x0811dfa2,lambda u:(log.append(('open_pipe',u.reg_read(UC_ARM_REG_R1),u.reg_read(UC_ARM_REG_R2),u.reg_read(UC_ARM_REG_R3),arg(u,4)&0xff,arg(u,5)&0xff,arg(u,6)&0xffff)),r0(u,0)))
 stub(u,0x0811dfc8,lambda u:(log.append(('close_pipe',u.reg_read(UC_ARM_REG_R1))),r0(u,0)))
 stub(u,0x0811e004,lambda u:(log.append(('free_pipe',u.reg_read(UC_ARM_REG_R1))),r0(u,0)))
@@ -62,12 +67,13 @@ def submit(u):
     if u.reg_read(UC_ARM_REG_R2)==1:u.mem_write(buf,struct.pack('<I',fbval[0])[:n])   # the device answers the feedback read
     sent.append((pipe,u.reg_read(UC_ARM_REG_R2),u.reg_read(UC_ARM_REG_R3),arg(u,4)&0xff,bytes(u.mem_read(buf,n))));r0(u,0)
 stub(u,0x08105894,submit)
-stub(u,0x081058ce,lambda u:r0(u,urb[0] if u.reg_read(UC_ARM_REG_R1)==3 else fbst[0]))
+stub(u,0x081058ce,lambda u:r0(u,urb[0] if u.reg_read(UC_ARM_REG_R1) in OUTP else fbst[0]))
+stub(u,0x08105838,lambda u:r0(u,3))   # last transfer size: the feedback answer's 3 bytes
 stub(u,0x0811b94a,lambda u:r0(u,0))
 stub(u,0x0811ba90,lambda u:r0(u,heap[0]))
 stub(u,0x0811bbc8,lambda u:(frees.append(u.reg_read(UC_ARM_REG_R0))))
 def reset(mode,**kw):
-    DEV[0]=cfg(**kw);del log[:],sent[:],setups[:],frees[:];w32(u,PDATA,0);fbval[0]=48<<14;fbst[0]=1
+    DEV[0]=cfg(**kw);del log[:],sent[:],setups[:],frees[:];allocs.clear();w32(u,PDATA,0);fbval[0]=48<<14;fbst[0]=1
     w32(u,LINE+0xc,mode);w32(u,LINE+0x10,0);w32(u,LINE+0x14,0)
     u.mem_write(PHOST+2,b'\1');u.mem_write(PHOST+0x31c,b'\x05\x01')
     u.mem_write(PHOST+0x33a,struct.pack('<H',len(DEV[0])))
@@ -97,9 +103,9 @@ check(r==0 and ('get_desc',0x0200,len(DEV[0])) in log,'Requests: reads the whole
 check(setups[0]==(bytes.fromhex('010b010004000000'),b''),'SET_INTERFACE: interface 4, alternate 1')
 check(setups[1]==(bytes.fromhex('2101000103080400'),bytes.fromhex('80bb0000')),'UAC2 SET_CUR sampling frequency 48000 on clock 8 (its input terminal), AC interface 3')
 check(setups[2:]==[(bytes.fromhex('2101000103050100'),b'\0'),(bytes.fromhex('2101000203050200'),b'\0\0')],'feature unit 5 (on the stream terminal): SET_CUR mute off, then volume 0 dB, master channel')
-check(('alloc_pipe',3) in log and ('open_pipe',3,3,5,1,1,980) in log,'isochronous OUT pipe on EP 0x03, device address 5, full speed, max packet 980')
-check(('alloc_pipe',0x85) in log and ('open_pipe',4,0x85,5,1,1,3) in log,'isochronous IN pipe on the feedback endpoint 0x85, 3 bytes')
-check(u32(u,OTG+0x28)==0x00800200 and u32(u,OTG+0x100)==0x01000280 and u32(u,OTG+0x10)==0x420,'up to 49 frames (980 bytes): periodic TX FIFO 0x100 words at 0x280 (non-periodic 0x80 words), TX FIFOs flushed')
+check(log.count(('alloc_pipe',3))==2 and ('open_pipe',3,3,5,1,1,980) in log and ('open_pipe',6,3,5,1,1,980) in log,'two isochronous OUT pipes on EP 0x03 (used in turn), device address 5, full speed, max packet 980')
+check(log.count(('alloc_pipe',0x85))==2 and ('open_pipe',4,0x85,5,1,1,3) in log and ('open_pipe',7,0x85,5,1,1,3) in log,'two isochronous IN pipes on the feedback endpoint 0x85, 3 bytes')
+check(u32(u,OTG+0x24)==0x100 and u32(u,OTG+0x28)==0x00800100 and u32(u,OTG+0x100)==0x02000180,'up to 49 frames (980 bytes), two in the FIFO at once: RX FIFO 0x100 words, non-periodic 0x80 at 0x100, periodic 0x200 at 0x180 (0x380 words, inside the stock 0x3e0)')
 check(log[-1]=='midi_req' and state()==(4,10),'then the MIDI Requests; state Sending, 10 channels')
 # SOF: one packet per ms, the sine on channels 1 and 2.
 del log[:];urb[0]=0;call(u,F['host_sof'],PHOST)
@@ -109,9 +115,11 @@ check(len(data())==1 and data()[0][:4]==(3,0,1,1) and len(p)==960 and len(fbread
 check([sample(f,0) for f in (0,6,12,18,24,36)]==[0,5793,8192,5793,0,-8192] and all(sample(f,1)==sample(f,0) for f in range(48)) and all(sample(f,c)==0 for f in range(48) for c in range(2,10)),'packet: 1 kHz sine at -12 dBFS on channels 1 and 2, channels 3-10 silent')
 check(log==['midi_sof'],'SOF: MIDI SOF still runs')
 call(u,F['host_sof'],PHOST)
-check(len(data())==1 and u32(u,HEAP+0x18)==1,'next SOF with the last packet not out yet (URB idle): skipped and counted')
+check(len(data())==2 and [x[0] for x in data()]==[3,6] and [x[0] for x in fbreads()]==[4,7],'next SOF: the packet goes on the second pipe (the first one is still on its way: the core sends in the next frame), the feedback read too')
+call(u,F['host_sof'],PHOST)
+check(len(data())==2 and u32(u,HEAP+0x18)==1,'third SOF with the first pipe not back (URB idle): skipped and counted')
 urb[0]=1;call(u,F['host_sof'],PHOST);call(u,F['host_sof'],PHOST)
-check(len(data())==3 and u32(u,HEAP+0x14)==3,'URB done: a packet every SOF')
+check(len(data())==4 and [x[0] for x in data()]==[3,6,3,6] and u32(u,HEAP+0x14)==4,'URB done: a packet every SOF, the pipes in turn')
 check(u32(u,LINE+0x1c)==2,'DEV Pkts: No SOF until the first second is counted')
 for i in range(996):call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==1,'after 1000 SOFs with the packets done: DEV Pkts OK')
@@ -170,7 +178,7 @@ check(log==['midi_bgnd'],'Bgnd: MIDI')
 n=len(sent);w32(u,LINE+0xc,0);call(u,F['host_sof'],PHOST);w32(u,LINE+0xc,1)
 check(len(sent)==n,'DEV Audio switched Off while sending: no more packets or feedback reads')
 del log[:];call(u,F['host_deinit'],PHOST)
-check(('close_pipe',3) in log and ('free_pipe',3) in log and ('close_pipe',4) in log and ('free_pipe',4) in log and frees==[HEAP] and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==0 and state()==(1,0) and u32(u,LINE+0x1c)==0,'DeInit: both pipes closed and freed, context back to the heap, MIDI DeInit; state Waiting')
+check(all(('close_pipe',q) in log and ('free_pipe',q) in log for q in OUTP+FBP) and frees==[HEAP] and log[-1]=='midi_deinit' and u32(u,LINE+0x18)==0 and state()==(1,0) and u32(u,LINE+0x1c)==0,'DeInit: all four pipes closed and freed, context back to the heap, MIDI DeInit; state Waiting')
 call(u,F['host_sof'],PHOST)
 check(len(sent)==n,'after DeInit the SOF sends nothing')
 

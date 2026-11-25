@@ -26,7 +26,11 @@
   44.1k" and "OK, FB 96k" tell why. Feedback in 16.16 per frame or per
   microframe (as some Linux gadgets send it) is understood too. **DEV FB
   raw** (tag 0x2b0, key `devfb`) shows the last answer as received; the
-  definition table has 0x2b1 records. The MIDI host class
+  definition table has 0x2b1 records. Two pipes in turn for the audio OUT
+  and the feedback IN: the USB core sends an isochronous transfer in the
+  frame after it is started, so one pipe served only every other 1 ms frame
+  (the S-4 answered its feedback empty); the periodic TX FIFO holds two
+  packets (RX 0x100, NPTX 0x80, PTX 0x200 words). The MIDI host class
   is wrapped (registration hook at 0x081056C6): with DEV Audio on it reads the
   device's config descriptor, selects its isochronous audio OUT stream
   (SET_INTERFACE, UAC2 SET_CUR 48 kHz), enlarges the periodic TX FIFO when
