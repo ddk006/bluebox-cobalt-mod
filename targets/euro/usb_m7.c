@@ -105,8 +105,8 @@ static void apply(uint32_t m)
     state()->cur = m;
 }
 
-/* DEV port audio (dev_ring.h): the block's 18 channels as 16 bit into the
- * M4's ring while its heartbeat runs. The heartbeat (low bits of the ring
+/* DEV port audio (dev_ring.h): the block, routed to the device's channels
+ * 1-10 as 16 bit, into the M4's ring while its heartbeat runs. The heartbeat (low bits of the ring
  * address in the USB line) counts only when it changed at most 50 ms ago;
  * four changes in a row are needed, so neither a stale address in backup SRAM
  * after a reset nor one late change is written to. Kept in this core's own
@@ -131,14 +131,21 @@ static void dev_feed(const uint8_t *src, int bytes)
     SCB_DCIMVAC = a;   /* line 0 is the M4's */
     __asm volatile("dsb\nisb" ::: "memory");
     if (r->magic != DEV_RING_MAGIC) return;
-    unsigned frames = (unsigned)bytes / FRAME_ALL, wr = r->wr % DEV_RING_FRAMES;
+    unsigned size = r->frames;
+    if (size < DEV_FRAMES_MIN || size > DEV_FRAMES_MAX || a + sizeof *r + size * DEV_OUTS * 2u > DEV_RAM_HI) return;
+    uint8_t route[DEV_OUTS];
+    for (unsigned k = 0; k < DEV_OUTS; k++) route[k] = r->route[k] <= DEV_SRC ? r->route[k] : 0u;
+    unsigned frames = (unsigned)bytes / FRAME_ALL, wr = r->wr % size;
     for (unsigned i = 0; i < frames; i++) {
         const uint8_t *f = src + i * FRAME_ALL;
-        int16_t *d = &r->data[wr * DEV_SRC];
-        for (unsigned c = 0; c < DEV_SRC; c++) d[c] = (int16_t)(f[3 * c + 1] | f[3 * c + 2] << 8);
+        int16_t *d = &r->data[wr * DEV_OUTS];
+        for (unsigned k = 0; k < DEV_OUTS; k++) {
+            unsigned c = route[k] - 1u;
+            d[k] = route[k] ? (int16_t)(f[3 * c + 1] | f[3 * c + 2] << 8) : 0;
+        }
         SCB_DCCMVAC = (uint32_t)d;
-        SCB_DCCMVAC = (uint32_t)d + DEV_SRC * 2u - 1u;
-        wr = wr + 1u == DEV_RING_FRAMES ? 0u : wr + 1u;
+        SCB_DCCMVAC = (uint32_t)d + DEV_OUTS * 2u - 1u;
+        wr = wr + 1u == size ? 0u : wr + 1u;
     }
     __asm volatile("dsb" ::: "memory");   /* the data before the write position */
     r->wr = wr;

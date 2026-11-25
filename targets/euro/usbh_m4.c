@@ -51,7 +51,7 @@ typedef uint8_t (*cls_fn)(void *);
 #define fw_get      ((int (*)(void *, unsigned))FN(0x08120588u))   /* settings value by tag (read only, linear search) */
 #define SETTINGS    ((void *)(0x30018010u + 0x73b4u))            /* the session's settings (src/pc_m4.c PC_SETTINGS, euro) */
 #define TAG_DEV_OUT 0x2b1u   /* "DEV 1:".."DEV 10:" (src/pc_m4.c PC_DEV_OUT): 0 Off, 1-18 bluebox USB channel */
-#define DEV_OUTS 10u
+#define HEAP_FREE   (*(volatile uint32_t *)0x3000eaccu)   /* FreeRTOS heap_4 xFreeBytesRemaining (pvPortMalloc 0x0811bb72) */
 
 /* phost (USBH_HandleTypeDef) fields used. */
 #define P8(p, o)  (*(volatile uint8_t *)((uint8_t *)(p) + (o)))
@@ -109,7 +109,7 @@ struct host_ctx {
     uint32_t fb_raw;             /* the last answer as received ("DEV FB raw:") */
     uint8_t fb_buf[4], ctl[4];
     uint8_t rate[4];
-    uint8_t cfg[CFG_MAX];
+    uint8_t cfg[CFG_MAX];   /* the config descriptor while Requests parse it, then the second packet (pkt2) */
     uint8_t pkt[PKT_MAX];
     /* The second pipe of each pair: the USB core sends an isochronous
      * transfer in the frame after it is started (ODDFRM = next frame), so one
@@ -119,17 +119,19 @@ struct host_ctx {
      * fb_inflight / fb_buf above, index 1 these. */
     uint8_t pipe2, inflight2, fb_pipe2, fb_inflight2, cur, fb_cur, open2, fb_open2;
     uint8_t fb_buf2[4];
-    uint8_t pkt2[PKT_MAX];
     /* Mode Audio: live (Init to DeInit; the block stays allocated for the
-     * M7), ring read position, primed (ring filled to RING_TARGET once),
+     * M7), ring read position, primed (ring filled to half once),
      * heartbeat, routes (DEV 1-10), averaged fill (x256), gaps and M7 blocks
      * this second, drift corrections. */
     uint8_t live, primed, hb, spare8;
-    uint8_t route[DEV_OUTS], spare10[2];
+    uint32_t ring;   /* the ring after this context (dev_ring.h) */
     uint32_t rd, avg, xruns, blocks_seen, slips;
 };
-#define RING_TARGET 128u   /* frames kept in the ring (2.7 ms) */
-#define RING_SLACK 40u    /* drift: one frame skipped or doubled when the average is off by more */
+#define PKT2(c) ((c)->cfg)
+_Static_assert(CFG_MAX >= PKT_MAX, "cfg doubles as pkt2");
+/* The ring keeps half its frames; one frame is skipped or doubled when the
+ * averaged fill is off by more than a sixth. Ring sizes tried, largest first. */
+static const uint16_t ring_sizes[] = {256, 160, 96};
 #define CTX_MAGIC 0x48535431u
 
 /* 1 kHz at 48 kHz is 48 samples a cycle: one packet holds one cycle. -12 dBFS. */
@@ -145,12 +147,14 @@ static volatile struct host_line *line(void) {backup_enable(); PWR_CR1 |= 1u << 
 static struct host_ctx *block(void)
 {
     uint32_t a = LINE->ctx & ~31u;
-    if (a < DEV_RAM_LO || a > DEV_RAM_HI - sizeof(struct dev_ring) - sizeof(struct host_ctx)) return 0;
+    if (a < DEV_RAM_LO || a > DEV_RAM_HI - sizeof(struct dev_ring)) return 0;
     struct dev_ring *r = (struct dev_ring *)a;
-    struct host_ctx *c = (struct host_ctx *)(r + 1);
-    return r->magic == DEV_RING_MAGIC && r->ctx == (uint32_t)c && c->magic == CTX_MAGIC ? c : 0;
+    uint32_t b = r->ctx;
+    if (r->magic != DEV_RING_MAGIC || b < DEV_RAM_LO || b > DEV_RAM_HI - sizeof(struct host_ctx) || (b & 31u)) return 0;
+    struct host_ctx *c = (struct host_ctx *)b;
+    return c->magic == CTX_MAGIC && c->ring == a ? c : 0;
 }
-static struct dev_ring *ring_of(struct host_ctx *c) {return (struct dev_ring *)c - 1;}
+static struct dev_ring *ring_of(struct host_ctx *c) {return (struct dev_ring *)c->ring;}
 static struct host_ctx *ctx(void) {struct host_ctx *c = block(); return c && c->live ? c : 0;}
 static void set_state(unsigned s) {line()->state = s;}
 static void kick(void *phost) {msg_put(P32(phost, OS_EVENT), 1u, 0u);}
@@ -219,39 +223,39 @@ static void routes(struct host_ctx *c)
 {
     for (unsigned k = 0; k < DEV_OUTS; k++) {
         int v = fw_get(SETTINGS, TAG_DEV_OUT + k);
-        c->route[k] = (uint8_t)(v >= 0 && v <= (int)DEV_SRC ? v : 0);
+        ring_of(c)->route[k] = (uint8_t)(v >= 0 && v <= (int)DEV_SRC ? v : 0);   /* the M7 routes as it writes */
     }
 }
 
 /* Mode Audio: n frames from the M7's ring, each device channel from its
- * route. The ring is first filled to RING_TARGET (silence meanwhile); its
+ * route (the M7 routes as it writes). The ring is first filled to half (silence meanwhile); its
  * averaged fill keeps it there by skipping or doubling one frame now and then
  * (the device's clock is not the bluebox's). Runs empty: a gap, silence until
  * it is filled again. */
 static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n)
 {
     struct dev_ring *g = ring_of(c);
-    unsigned wr = g->wr % DEV_RING_FRAMES, rd = c->rd % DEV_RING_FRAMES;
-    unsigned avail = (wr + DEV_RING_FRAMES - rd) % DEV_RING_FRAMES;
-    if (avail > DEV_RING_FRAMES - 16u) {rd = (wr + DEV_RING_FRAMES - RING_TARGET) % DEV_RING_FRAMES; avail = RING_TARGET; c->xruns++;}   /* overrun */
-    if (!c->primed && avail >= RING_TARGET) {c->primed = 1; c->avg = avail << 8;}
+    unsigned size = g->frames, target = size / 2u, slack = size / 6u;
+    unsigned wr = g->wr % size, rd = c->rd % size;
+    unsigned avail = (wr + size - rd) % size;
+    if (avail > size - 16u) {rd = (wr + size - target) % size; avail = target; c->xruns++;}   /* overrun */
+    if (!c->primed && avail >= target) {c->primed = 1; c->avg = avail << 8;}
     if (c->primed) {
         c->avg += (int32_t)((avail << 8) - c->avg) / 64;
         if (c->sofs % 64u == 0u) {
-            if (c->avg > (RING_TARGET + RING_SLACK) << 8 && avail > n) {rd = (rd + 1u) % DEV_RING_FRAMES; avail--; c->slips++;}
-            else if (c->avg < (RING_TARGET - RING_SLACK) << 8 && avail) {rd = (rd + DEV_RING_FRAMES - 1u) % DEV_RING_FRAMES; avail++; c->slips++;}
+            if (c->avg > (target + slack) << 8 && avail > n) {rd = (rd + 1u) % size; avail--; c->slips++;}
+            else if (c->avg < (target - slack) << 8 && avail) {rd = (rd + size - 1u) % size; avail++; c->slips++;}
         }
     }
     uint8_t *p = buf;
     for (unsigned f = 0; f < n; f++) {
         const int16_t *s = 0;
         if (c->primed) {
-            if (avail) {s = &g->data[rd * DEV_SRC]; rd = (rd + 1u) % DEV_RING_FRAMES; avail--;}
+            if (avail) {s = &g->data[rd * DEV_OUTS]; rd = (rd + 1u) % size; avail--;}
             else {c->primed = 0; c->xruns++;}
         }
         for (unsigned ch = 0; ch < c->nrch; ch++) {
-            unsigned src = ch < DEV_OUTS ? c->route[ch] : 0u;
-            int16_t v = s && src ? s[src - 1u] : 0;
+            int16_t v = s && ch < DEV_OUTS ? s[ch] : 0;
             for (unsigned b = 0; b + 2u < c->subslot; b++) *p++ = 0;
             *p++ = (uint8_t)v; *p++ = (uint8_t)((uint16_t)v >> 8);
         }
@@ -292,17 +296,26 @@ uint8_t host_init(void *phost)
     if (l->mode == 0u || l->mode > MODE_AUDIO) return midi_init(phost);   /* DEV Audio Off: the stock class */
     uint8_t r = midi_init(phost);
     l->channels = 0;
-    if (!c) {   /* once per boot: ring and context, 32-byte aligned, kept */
-        uint32_t raw = (uint32_t)port_malloc(sizeof(struct dev_ring) + sizeof(struct host_ctx) + 31u);
-        if (!raw) {set_state(ST_NOMEM); return r;}
-        struct dev_ring *g = (struct dev_ring *)((raw + 31u) & ~31u);
+    struct dev_ring *g = c ? ring_of(c) : 0;
+    if (!c) {   /* once per boot: context and ring, 32-byte aligned, kept; the ring as big as the heap allows */
+        const unsigned head = (sizeof(struct host_ctx) + 31u) & ~31u;
+        uint32_t raw = 0;
+        unsigned frames = 0;
+        for (unsigned k = 0; k < sizeof ring_sizes / sizeof ring_sizes[0] && !raw; k++) {
+            frames = ring_sizes[k];
+            raw = (uint32_t)port_malloc(31u + head + sizeof(struct dev_ring) + frames * DEV_OUTS * 2u);
+        }
+        if (!raw) {l->channels = (HEAP_FREE & 0xffffffu) << 8; set_state(ST_NOMEM); return r;}   /* "DEV FB raw:" shows the free heap */
+        c = (struct host_ctx *)((raw + 31u) & ~31u);
+        g = (struct dev_ring *)((uint32_t)c + head);
         for (unsigned i = 0; i < sizeof *g; i++) ((uint8_t *)g)[i] = 0;
-        c = (struct host_ctx *)(g + 1);
+        g->frames = frames;
         g->ctx = (uint32_t)c;
         g->magic = DEV_RING_MAGIC;
         l->ctx = (uint32_t)g;
     }
     for (unsigned i = 0; i < sizeof *c; i++) ((uint8_t *)c)[i] = 0;
+    c->ring = (uint32_t)g;
     c->magic = CTX_MAGIC;
     c->step = R_CFG;
     c->live = 1;
@@ -449,7 +462,7 @@ uint8_t host_sof(void *phost)
         if (c->fb_open) feedback(phost, c);
         unsigned i = c->open2 ? c->cur : 0u;   /* pipes in turn, one per frame */
         uint8_t pipe = i ? c->pipe2 : c->pipe, *inflight = i ? &c->inflight2 : &c->inflight;
-        uint8_t *buf = i ? c->pkt2 : c->pkt;
+        uint8_t *buf = i ? PKT2(c) : c->pkt;
         unsigned st = *inflight ? urb_state(phost, pipe) : 1u;
         if (*inflight && st == URB_IDLE) c->late++;
         else {

@@ -401,9 +401,10 @@ feedback (47-49 frames per ms) when it has one. **DEV Audio: Audio** sends the
 bluebox itself: **DEV 1** to **DEV 10** pick for each of the device's first ten
 channels a source (Off, Track 1-12, Main L/R, Bus 1-4 = the bluebox USB
 channels 1-18; default Track 1-8, Main L, Main R). The M7 copies every audio
-block into a ring in M4 memory (`targets/euro/dev_ring.h`); the driver keeps
-it about 2.7 ms full and skips or doubles a frame now and then for the clock
-difference to the device. DEV Pkts then also says "OK, no input" (nothing
+block, routed, into a ring in M4 memory (`targets/euro/dev_ring.h`, 256
+frames, or 160 or 96 when the heap is short); the driver keeps it half full
+and skips or doubles a frame now and then for the clock difference to the
+device. With "No memory" DEV FB raw shows the free heap in bytes. DEV Pkts then also says "OK, no input" (nothing
 from the M7) or "OK, gaps" (the ring ran empty). Default Off: the port then works as stock. Code:
 `targets/euro/usbh_m4.c`.
 

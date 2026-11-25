@@ -96,8 +96,10 @@ check(ring_in==[frame*2],'stock again: frames pass through')
 DR=0x30030000
 try:u.mem_map(0x30000000,0x48000)
 except Exception:pass
-u.mem_write(DR,bytes(64+256*36));w32(u,DR,0x52564544);w32(u,DR+4,DR+64+256*36)
+u.mem_write(DR,bytes(64+256*20));w32(u,DR,0x52564544);w32(u,DR+4,0x3002f000);w32(u,DR+8,256)
+u.mem_write(DR+12,bytes([1,0,18,13,14,2,3,4,5,6]))   # DEV 1 USB 1, DEV 2 Off, DEV 3 USB 18, DEV 4/5 Main
 f24=bytes(b for c in range(18) for b in (0x10+c,0x40+c,0x80+c))
+def routed(rt=(1,0,18,13,14,2,3,4,5,6)):return b''.join(bytes((0x40+c-1,0x80+c-1)) if c else b'\0\0' for c in rt)
 def push(hb,dt=8):
     clock[0]+=dt;w32(u,OUT+0x18,DR|hb);u.mem_write(BLK,f24*2);call(u,U['usb_push'],RING,BLK,108)
 push(0);push(0);push(0)
@@ -105,7 +107,7 @@ check(u32(u,DR+0x20)==0 and u32(u,DR+0x24)==0,'DEV: a ring address without a hea
 push(1);push(2);push(3)
 check(u32(u,DR+0x20)==0,'three beats: not yet')
 push(4)
-check(u32(u,DR+0x20)==2 and u32(u,DR+0x24)==1 and bytes(u.mem_read(DR+64,72))==bytes(b for c in range(18) for b in (0x40+c,0x80+c))*2,'four beats in a row: the 2 frames written as 16 bit (middle and high byte of each sample), write position 2, one block')
+check(u32(u,DR+0x20)==2 and u32(u,DR+0x24)==1 and bytes(u.mem_read(DR+64,40))==routed()*2,'four beats in a row: the 2 frames written as routed (DEV 1 USB 1, DEV 2 silent, DEV 3 USB 18, ...), 16 bit (middle and high byte), write position 2, one block')
 push(4,dt=1);push(4,dt=1)
 check(u32(u,DR+0x20)==6,'between beats (within 50 ms) it keeps writing')
 push(4,dt=60)
@@ -114,9 +116,11 @@ push(5);push(6);push(7);push(0)
 check(u32(u,DR+0x20)==8,'beats again: writes again')
 w32(u,DR,0);push(1)
 check(u32(u,DR+0x20)==8,'no ring magic: nothing written')
-w32(u,DR,0x52564544);clock[0]=100;push(2,dt=0)
+w32(u,DR,0x52564544);w32(u,DR+8,20);push(2)
+check(u32(u,DR+0x20)==8,'a ring size out of range (20 frames): nothing written')
+w32(u,DR+8,256);clock[0]=100;push(3,dt=0)
 check(u32(u,DR+0x20)==8,'the clock went back (this core restarted): beats start over, nothing written')
-w32(u,DR+0x20,255);push(3);push(4);push(5)   # beats 2-4 since the restart
-check(u32(u,DR+0x20)==1 and bytes(u.mem_read(DR+64+255*36,36))==bytes(b for c in range(18) for b in (0x40+c,0x80+c)),'the write position wraps at 256 frames')
+w32(u,DR+0x20,255);push(4);push(5);push(6)   # beats 2-4 since the restart
+check(u32(u,DR+0x20)==1 and bytes(u.mem_read(DR+64+255*20,20))==routed(),'the write position wraps at the ring size (256 frames)')
 w32(u,OUT+0x18,0)
 print(H.checks,'USB Out checks passed')

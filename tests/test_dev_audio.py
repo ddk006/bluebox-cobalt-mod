@@ -16,7 +16,7 @@ F={f[2]:int(f[0],16) for line in SYMS.read_text().splitlines() if len(f:=line.sp
 
 u=machine(cpu_model=UC_CPU_ARM_CORTEX_M4);u.mem_map(0x40080000,0x1000)
 PHOST=0x3000ac28;LINE=0x38800ee0;PDATA=0x300000b4;OTG=0x40080000;HEAP=0x30030000
-RING=HEAP;RINGSZ=64+256*18*2;CTX=RING+RINGSZ   # the block: ring (dev_ring.h), then the context
+CTX=HEAP;RING=None   # the block: the context, then the ring (dev_ring.h); RING read from the line after the first Init
 CLASS=0x30000098
 u.mem_write(CLASS,patched[0x0814fdc8-0x08040000:][:32])   # the .data image of the MIDI class
 reg=[];stub(u,0x0811d184,lambda u:(reg.append((u.reg_read(UC_ARM_REG_R0),u.reg_read(UC_ARM_REG_R1))),u.reg_write(UC_ARM_REG_R0,0)))
@@ -75,7 +75,8 @@ stub(u,0x08105838,lambda u:r0(u,3))   # last transfer size: the feedback answer'
 stub(u,0x0811b94a,lambda u:r0(u,0))
 ROUTE={0x2b1+i:(i+1 if i<8 else i+5) for i in range(10)}   # the defaults: DEV 1-8 Track 1-8, DEV 9/10 Main L/R
 stub(u,0x08120588,lambda u:r0(u,ROUTE.get(u.reg_read(UC_ARM_REG_R1),0)&0xffffffff))
-stub(u,0x0811ba90,lambda u:r0(u,heap[0]))
+asks=[];limit=[1<<30]
+stub(u,0x0811ba90,lambda u:(asks.append(u.reg_read(UC_ARM_REG_R0)),r0(u,heap[0] if u.reg_read(UC_ARM_REG_R0)<=limit[0] else 0)))
 stub(u,0x0811bbc8,lambda u:(frees.append(u.reg_read(UC_ARM_REG_R0))))
 def reset(mode,**kw):
     DEV[0]=cfg(**kw);del log[:],sent[:],setups[:],frees[:];allocs.clear();w32(u,PDATA,0);fbval[0]=48<<14;fbst[0]=1
@@ -101,7 +102,9 @@ check(call(u,F['host_requests'],PHOST)==0 and call(u,F['host_sof'],PHOST)==0 and
 # On, a device like the S-4 at full speed: MIDI, 10 channels of 16 bit host -> device,
 # feature unit 5 on the stream, feedback endpoint 0x85 (3 bytes, 10.14).
 reset(1)
-check(call(u,F['host_init'],PHOST)==0 and log==['midi_init'] and u32(u,LINE+0x18)==RING and u32(u,RING)==0x52564544 and u32(u,RING+4)==CTX and u32(u,CTX)==0x48535431 and state()==(3,0),'DEV Audio On: MIDI Init, then one block from the FreeRTOS heap (ring "DEVR" pointing at the context after it); state Starting')
+check(call(u,F['host_init'],PHOST)==0 and log==['midi_init'],'DEV Audio On: MIDI Init first')
+RING=u32(u,LINE+0x18)
+check(RING>CTX and RING%32==0 and u32(u,RING)==0x52564544 and u32(u,RING+4)==CTX and u32(u,RING+8)==256 and u32(u,CTX)==0x48535431 and state()==(3,0),'then one block from the FreeRTOS heap: the context, the ring "DEVR" after it (256 frames, pointing back at the context); state Starting')
 r,n=requests()
 check(r==0 and ('get_desc',0x0200,len(DEV[0])) in log,'Requests: reads the whole config descriptor ('+str(len(DEV[0]))+' bytes) and ends with OK after '+str(n)+' calls')
 check(setups[0]==(bytes.fromhex('010b010004000000'),b''),'SET_INTERFACE: interface 4, alternate 1')
@@ -214,14 +217,14 @@ check(len(p)==288 and p[12*6:12*6+3]==bytes([0])+struct.pack('<h',8192) and u32(
 call(u,F['host_deinit'],PHOST)
 
 # Mode Audio: the M7's ring (18 sources of 16 bit per frame) routed to the device's channels.
-def feed(n):   # the M7 writes n frames: source s of frame k is s*100 + k % 50
-    wr=u32(u,RING+0x20);k0=feed.k
-    for j in range(n):u.mem_write(RING+64+((wr+j)%256)*36,struct.pack('<18h',*[s*100+(k0+j)%50 for s in range(1,19)]))
+def feed(n):   # the M7 writes n frames as routed (ring +12): source s of frame k is s*100 + k % 50
+    wr=u32(u,RING+0x20);k0=feed.k;rt=bytes(u.mem_read(RING+12,10))
+    for j in range(n):u.mem_write(RING+64+((wr+j)%256)*20,struct.pack('<10h',*[s*100+(k0+j)%50 if s else 0 for s in rt]))
     feed.k+=n;w32(u,RING+0x20,(wr+n)%256);w32(u,RING+0x24,u32(u,RING+0x24)+1)
 feed.k=0
 ROUTE[0x2b2]=0;ROUTE[0x2b3]=15   # DEV 2 Off, DEV 3 Bus 1
 reset(4);call(u,F['host_init'],PHOST);r,n=requests();urb[0]=1
-check(r==0 and state()==(4,10) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Audio: the stream opens as before, in the same block')
+check(r==0 and state()==(4,10) and u32(u,LINE+0x18)&~31==RING and bytes(u.mem_read(RING+12,10))==bytes([1,0,15,4,5,6,7,8,13,14]),'DEV Audio Audio: the stream opens as before, in the same block; the routes go to the ring for the M7 (DEV 2 Off, DEV 3 Bus 1)')
 del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
 check(len(p)==960 and p==bytes(960),'ring empty: a silent packet of 48 frames')
 feed(200);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
@@ -236,8 +239,9 @@ for i in range(16):feed(48);call(u,F['host_sof'],PHOST);hb.add(u32(u,LINE+0x18)&
 check(len(hb)>=2 and all(u32(u,LINE+0x18)&~31==RING for _ in [0]),'heartbeat for the M7: the low bits of the ring address change every 8 ms')
 ROUTE[0x2b1]=13
 for i in range(100):feed(48);call(u,F['host_sof'],PHOST)
+for i in range(4):feed(48);call(u,F['host_sof'],PHOST)   # the frames written before the change are out
 del sent[:];feed(48);call(u,F['host_sof'],PHOST);p=data()[0][4]
-check(smp(p,0,0)//100==13,'a route changed on the USB page (DEV 1 Main L) is taken within 100 ms')
+check(u.mem_read(RING+12,1)[0]==13 and smp(p,47,0)//100==13,'a route changed on the USB page (DEV 1 Main L) reaches the M7 within 100 ms')
 ROUTE[0x2b1]=1
 for i in range(2000):feed(48);call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==1,'a second of steady stream: DEV Pkts OK')
@@ -264,7 +268,11 @@ ROUTE[0x2b2]=2;ROUTE[0x2b3]=3
 reset(1,nrch=24,maxp=1023);call(u,F['host_init'],PHOST);r,n=requests()
 check(r==0 and state()==(7,24) and not setups,'24 channels: 2304 bytes per ms do not fit, state Too big, nothing selected')
 call(u,F['host_deinit'],PHOST)
-reset(1);w32(u,LINE+0x18,0);heap[0]=0   # a new boot
-check(call(u,F['host_init'],PHOST)==0 and state()==(6,0) and u32(u,LINE+0x18)==0,'no heap: state No memory, MIDI Init result returned')
+reset(1);w32(u,LINE+0x18,0);del asks[:];call(u,F['host_init'],PHOST);big=asks[0]   # a new boot
+reset(1);w32(u,LINE+0x18,0);del asks[:];limit[0]=big-1;call(u,F['host_init'],PHOST)
+check(len(asks)==2 and asks[0]-asks[1]==(256-160)*20 and u32(u,u32(u,LINE+0x18)+8)==160 and state()==(3,0),'heap too small for a 256-frame ring ('+str(big)+' bytes): the next size, 160 frames')
+limit[0]=1<<30
+reset(1);w32(u,LINE+0x18,0);heap[0]=0;w32(u,0x3000eacc,5432)   # a new boot, 5432 bytes free
+check(call(u,F['host_init'],PHOST)==0 and state()==(6,5432<<8) and u32(u,LINE+0x18)==0,'no heap: state No memory, the free heap in DEV FB raw, MIDI Init result returned')
 heap[0]=HEAP
 print(H.checks,'DEV port audio checks passed')
