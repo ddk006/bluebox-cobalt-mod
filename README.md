@@ -402,9 +402,10 @@ bluebox itself: **DEV 1** to **DEV 10** pick for each of the device's first ten
 channels a source (Off, Track 1-12, Main L/R, Bus 1-4 = the bluebox USB
 channels 1-18; default Track 1-8, Main L, Main R). The M7 copies every audio
 block, routed, into a ring in M4 memory (`targets/euro/dev_ring.h`, 256
-frames, or 160 or 96 when the heap is short); the driver keeps it half full
-and skips or doubles a frame now and then for the clock difference to the
-device. With "No memory" DEV FB raw shows the free heap in bytes. **Ring test**
+frames, or 160 or 128 when the heap is short). The bluebox audio clock is not
+the device's (on the S-4: 48224 frames a second against 48000), so the driver
+reads the ring through a resampler (linear interpolation, step set by a PI
+controller on the ring fill, up to 3 % off). With "No memory" DEV FB raw shows the free heap in bytes. **Ring test**
 (DEV Audio) lets the M7 write a 1 kHz sine into the ring instead of the audio:
 it checks the M7 -> M4 path on its own. In Audio and Ring test, DEV FB raw shows
 the frames the M7 wrote in the last second (48000 at 48 kHz). DEV Pkts then also says "OK, no input" (nothing

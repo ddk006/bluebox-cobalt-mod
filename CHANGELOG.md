@@ -8,9 +8,12 @@
   Bus 1-4 (or Off) to its channels; default Track 1-8, Main L/R. The M7
   (usb_push) copies each block, routed to the device's channels 1-10, as 16
   bit into a ring in the M4 heap (`targets/euro/dev_ring.h`, 256 frames, 160
-  or 96 when the heap is short; context and ring 7.4 KB, allocated once per
-  boot) while the M4 driver's heartbeat runs; the driver keeps it half full
-  and skips or doubles one frame now and then. "No memory" shows the free
+  or 128 when the heap is short; context and ring 7.4 KB, allocated once per
+  boot) while the M4 driver's heartbeat runs. The driver reads it through a
+  resampler (linear interpolation, PI control on the fill, up to 3 %): the
+  M7 writes 48224 frames a second against the S-4's 48000, which the old
+  skip-or-double correction (about 300 ppm) could not follow ("OK, gaps",
+  distorted). "No memory" shows the free
   heap in DEV FB raw. DEV Audio "Ring test": the M7 writes a 1 kHz sine
   into the ring instead (checks that path alone). DEV Pkts "OK, no input" / "OK, gaps".
   Settings capacity 192, definition table 0x2bb records.

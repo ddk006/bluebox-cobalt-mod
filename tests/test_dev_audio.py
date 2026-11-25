@@ -217,10 +217,10 @@ check(len(p)==288 and p[12*6:12*6+3]==bytes([0])+struct.pack('<h',8192) and u32(
 call(u,F['host_deinit'],PHOST)
 
 # Mode Audio: the M7's ring (18 sources of 16 bit per frame) routed to the device's channels.
-def feed(n):   # the M7 writes n frames as routed (ring +12): source s of frame k is s*100 + k % 50
-    wr=u32(u,RING+0x20);k0=feed.k;rt=bytes(u.mem_read(RING+12,10))
-    for j in range(n):u.mem_write(RING+64+((wr+j)%256)*20,struct.pack('<10h',*[s*100+(k0+j)%50 if s else 0 for s in rt]))
-    feed.k+=n;w32(u,RING+0x20,(wr+n)%256);w32(u,RING+0x24,u32(u,RING+0x24)+1);w32(u,RING+0x24+8,u32(u,RING+0x24+8)+n)
+def feed(n):   # the M7 writes n frames as routed (ring +12): source s of frame k is s*1000 + k % 1000
+    wr=u32(u,RING+0x20);k0=feed.k;rt=bytes(u.mem_read(RING+12,10));sz=u32(u,RING+8)
+    for j in range(n):u.mem_write(RING+64+((wr+j)%sz)*20,struct.pack('<10h',*[s*1000+(k0+j)%1000 if s else 0 for s in rt]))
+    feed.k+=n;w32(u,RING+0x20,(wr+n)%sz);w32(u,RING+0x24,u32(u,RING+0x24)+1);w32(u,RING+0x24+8,u32(u,RING+0x24+8)+n)
 feed.k=0
 ROUTE[0x2b2]=0;ROUTE[0x2b3]=15   # DEV 2 Off, DEV 3 Bus 1
 reset(4);call(u,F['host_init'],PHOST);r,n=requests();urb[0]=1
@@ -229,11 +229,13 @@ del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
 check(len(p)==960 and p==bytes(960),'ring empty: a silent packet of 48 frames')
 feed(200);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
 def smp(p,f,ch):return struct.unpack_from('<h',p,(f*10+ch)*2)[0]
-check([smp(p,f,0) for f in (0,1,47)]==[100,101,147] and all(smp(p,f,1)==0 for f in range(48)) and smp(p,5,2)==1505 and smp(p,5,3)==405 and smp(p,5,8)==1305 and smp(p,5,9)==1405,'ring filled: DEV 1 Track 1, DEV 2 Off (silent), DEV 3 Bus 1, DEV 4 Track 4, DEV 9/10 Main L/R, frames in order')
+def smooth(seq):   # a ramp read through the resampler: steps of 0-2 (interpolated), except where it wraps at 1000
+    return all(0<=seq[k+1]-seq[k]<=2 or seq[k]>=990 or seq[k+1]<=10 for k in range(len(seq)-1))
+check([smp(p,f,0) for f in (0,1)]==[1000,1001] and all(smp(p,f,1)==0 for f in range(48)) and smp(p,5,2)==15005 and smp(p,5,3)==4005 and smp(p,5,8)==13005 and smp(p,5,9)==14005,'ring filled: DEV 1 Track 1, DEV 2 Off (silent), DEV 3 Bus 1, DEV 4 Track 4, DEV 9/10 Main L/R, frames in order')
 seq=[]
 for i in range(40):
-    feed(48);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4];seq+=[smp(p,f,0)-100 for f in range(len(p)//20)]
-check(all((seq[k+1]-seq[k])%50==1 for k in range(len(seq)-1)),'steady stream: frames follow on without a gap or a jump ('+str(len(seq))+' frames)')
+    feed(48);del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4];seq+=[smp(p,f,0)-1000 for f in range(len(p)//20)]
+check(smooth(seq),'steady stream: frames follow on without a gap or a jump ('+str(len(seq))+' frames)')
 hb=set()
 for i in range(16):feed(48);call(u,F['host_sof'],PHOST);hb.add(u32(u,LINE+0x18)&7)
 check(len(hb)>=2 and all(u32(u,LINE+0x18)&~31==RING for _ in [0]),'heartbeat for the M7: the low bits of the ring address change every 8 ms')
@@ -241,7 +243,7 @@ ROUTE[0x2b1]=13
 for i in range(100):feed(48);call(u,F['host_sof'],PHOST)
 for i in range(4):feed(48);call(u,F['host_sof'],PHOST)   # the frames written before the change are out
 del sent[:];feed(48);call(u,F['host_sof'],PHOST);p=data()[0][4]
-check(u.mem_read(RING+12,1)[0]==13 and smp(p,47,0)//100==13,'a route changed on the USB page (DEV 1 Main L) reaches the M7 within 100 ms')
+check(u.mem_read(RING+12,1)[0]==13 and smp(p,47,0)//1000==13,'a route changed on the USB page (DEV 1 Main L) reaches the M7 within 100 ms')
 ROUTE[0x2b1]=1
 for i in range(2000):feed(48);call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==1 and u32(u,LINE+0x14)>>8==48000,'a second of steady stream: DEV Pkts OK, DEV FB raw shows the 48000 frames the M7 wrote')
@@ -251,16 +253,21 @@ for i in range(2000):feed(40);call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==14,'the M7 gives less than the device takes: the ring runs empty, DEV Pkts OK, gaps')
 for i in range(3000):feed(48);call(u,F['host_sof'],PHOST)
 check(u32(u,LINE+0x1c)==1,'steady again: OK')
-seen=set()
-for i in range(25000):
-    feed(49 if i%150==0 else 48);call(u,F['host_sof'],PHOST)
-    if i%1000==999:seen.add(u32(u,LINE+0x1c))
-check(seen=={1},'the bluebox clock 140 ppm fast against the device (one frame more every 150 ms, 166 in all): the ring is held by skipping frames, no overrun, no gap')
-seen=set()
-for i in range(25000):
-    feed(47 if i%150==0 else 48);call(u,F['host_sof'],PHOST)
-    if i%1000==999:seen.add(u32(u,LINE+0x1c))
-check(seen=={1},'and 140 ppm slow: held by doubling frames, no gap')
+def drift(extra,secs,label):   # the M7 writes 48 frames a ms plus extra per 1000 ms (spread out)
+    seen=set();seq=[];acc=0
+    for i in range(secs*1000):
+        acc+=abs(extra);k=acc//1000;acc-=k*1000
+        feed(48+(k if extra>0 else -k));del sent[:];call(u,F['host_sof'],PHOST)
+        if i>=1000:seq+=[smp(data()[0][4],f,0)-1000 for f in range(len(data()[0][4])//20)]
+        if i%1000==999:seen.add(u32(u,LINE+0x1c))
+    c=u32(u,RING+4);RD=next(o for o in range(0,RING-c,4) if u32(u,c+o)==RING)+4   # the context (ring +4); rd follows the ring address there
+    fill=(u32(u,RING+0x20)-u32(u,c+RD))%256
+    fill+=len(data()[0][4])//20   # as the packet started
+    check(seen=={1} and smooth(seq) and abs(fill-146)<=24,label+': resampled, no overrun, no gap, the ring stays at its target 146 (fill '+str(fill)+' of 256), the signal stays smooth '+str((seen,smooth(seq))))
+drift(7,20,'the bluebox clock 140 ppm fast against the device')
+drift(-7,20,'and 140 ppm slow')
+drift(224,10,'48224 frames a second (measured on the S-4, 4700 ppm fast)')
+drift(-1000,10,'2 % slow')
 w32(u,LINE+0xc,5);del sent[:]
 for i in range(3):feed(48);call(u,F['host_sof'],PHOST)
 check(len(data())==3 and all(len(x[4]) in (960,980) for x in data()) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Ring test: streams from the ring as Audio (the M7 writes the sine)')
@@ -275,6 +282,16 @@ call(u,F['host_deinit'],PHOST)
 reset(1);w32(u,LINE+0x18,0);del asks[:];call(u,F['host_init'],PHOST);big=asks[0]   # a new boot
 reset(1);w32(u,LINE+0x18,0);del asks[:];limit[0]=big-1;call(u,F['host_init'],PHOST)
 check(len(asks)==2 and asks[0]-asks[1]==(256-160)*20 and u32(u,u32(u,LINE+0x18)+8)==160 and state()==(3,0),'heap too small for a 256-frame ring ('+str(big)+' bytes): the next size, 160 frames')
+limit[0]=big-(256-160)*20-1;reset(4);w32(u,LINE+0x18,0);call(u,F['host_init'],PHOST);requests();urb[0]=1
+RING=u32(u,LINE+0x18)&~31;feed.k=0;seen=[];seq=[];acc=0
+for i in range(5000):   # 48224 frames a second from the start in the M7's blocks of 32 frames, the smallest ring
+    acc+=48224
+    while acc>=32000:feed(32);acc-=32000
+    del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
+    if i>=300:seq+=[smp(p,f,0)-1000 for f in range(len(p)//20)]
+    if i%1000==999:seen.append(u32(u,LINE+0x1c))
+check(u32(u,RING+8)==128 and seen==[1]*5 and smooth(seq),'128-frame ring (least heap), 48224 frames a second from the start in blocks of 32: no overrun, no gap from the first second on, smooth '+str(seen))
+call(u,F['host_deinit'],PHOST)
 limit[0]=1<<30
 reset(1);w32(u,LINE+0x18,0);heap[0]=0;w32(u,0x3000eacc,5432)   # a new boot, 5432 bytes free
 check(call(u,F['host_init'],PHOST)==0 and state()==(6,5432<<8) and u32(u,LINE+0x18)==0,'no heap: state No memory, the free heap in DEV FB raw, MIDI Init result returned')

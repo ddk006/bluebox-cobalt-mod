@@ -122,18 +122,21 @@ struct host_ctx {
     uint8_t fb_buf2[4];
     /* Mode Audio: live (Init to DeInit; the block stays allocated for the
      * M7), ring read position, primed (ring filled to half once),
-     * heartbeat, routes (DEV 1-10), averaged fill (x256), gaps and M7 blocks
-     * this second, drift corrections. */
+     * heartbeat, averaged fill (x256), gaps and M7 blocks this second. */
     uint8_t live, primed, hb, spare8;
     uint32_t ring;   /* the ring after this context (dev_ring.h) */
-    uint32_t rd, avg, xruns, blocks_seen, slips;
+    uint32_t rd, avg, xruns, blocks_seen, spare32;
     uint32_t m7_frames;   /* the M7's frame count at the last second */
+    /* Resampler (fill_audio): read position fraction (16 bit), integral of
+     * the fill error (x256 frames x ms). */
+    uint32_t frac;
+    int32_t isum;
 };
 #define PKT2(c) ((c)->cfg)
 _Static_assert(CFG_MAX >= PKT_MAX, "cfg doubles as pkt2");
-/* The ring keeps half its frames; one frame is skipped or doubled when the
- * averaged fill is off by more than a sixth. Ring sizes tried, largest first. */
-static const uint16_t ring_sizes[] = {256, 160, 96};
+/* Ring sizes tried, largest first. The smallest must hold a packet (up to 51
+ * frames resampled), an M7 block (32 frames) and the margins (see fill_audio). */
+static const uint16_t ring_sizes[] = {256, 160, 128};
 #define CTX_MAGIC 0x48535431u
 
 /* 1 kHz at 48 kHz is 48 samples a cycle: one packet holds one cycle. -12 dBFS. */
@@ -230,38 +233,56 @@ static void routes(struct host_ctx *c)
 }
 
 /* Mode Audio: n frames from the M7's ring, each device channel from its
- * route (the M7 routes as it writes). The ring is first filled to half (silence meanwhile); its
- * averaged fill keeps it there by skipping or doubling one frame now and then
- * (the device's clock is not the bluebox's). Runs empty: a gap, silence until
- * it is filled again. */
+ * route (the M7 routes as it writes). The bluebox audio clock is not the
+ * device's (measured on the S-4: 48224 frames a second against 48000), so the
+ * ring is read with a resampler: each frame is interpolated between two ring
+ * frames, the read position moves by step = 1 + offset per frame. A PI
+ * controller on the averaged fill sets the offset and holds the fill at target;
+ * its integral is the clock ratio (kept across gaps), at most RS_MAX (3 %).
+ * The ring is first filled to target (silence meanwhile); it runs empty: a gap,
+ * silence until it is filled again. */
+#define RS_MAX 2048   /* step offset limit, x65536: 3.1 % */
+#define RS_KP 4       /* proportional: 16 per frame off (fill x256 >> 4) */
+#define RS_KI 12      /* integral: 1/16 per frame off and ms (sum of fill x256 >> 12) */
+static int32_t rs_clamp(int32_t v) {return v > RS_MAX ? RS_MAX : v < -RS_MAX ? -RS_MAX : v;}
 static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n)
 {
     struct dev_ring *g = ring_of(c);
-    unsigned size = g->frames, target = size / 2u, slack = size / 6u;
+    unsigned size = g->frames, target = (size + 36u) / 2u;   /* midway between a packet + an M7 block and the overrun limit */
     unsigned wr = g->wr % size, rd = c->rd % size;
     unsigned avail = (wr + size - rd) % size;
-    if (avail > size - 16u) {rd = (wr + size - target) % size; avail = target; c->xruns++;}   /* overrun */
-    if (!c->primed && avail >= target) {c->primed = 1; c->avg = avail << 8;}
+    if (avail > size - 16u) {rd = (wr + size - target) % size; avail = target; c->frac = 0; c->xruns++;}   /* overrun */
+    if (!c->primed && avail >= target) {c->primed = 1; c->avg = avail << 8; c->frac = 0;}
+    int32_t step = 65536;
     if (c->primed) {
-        c->avg += (int32_t)((avail << 8) - c->avg) / 64;
-        if (c->sofs % 64u == 0u) {
-            if (c->avg > (target + slack) << 8 && avail > n) {rd = (rd + 1u) % size; avail--; c->slips++;}
-            else if (c->avg < (target - slack) << 8 && avail) {rd = (rd + size - 1u) % size; avail++; c->slips++;}
-        }
+        c->avg += (int32_t)((avail << 8) - c->avg) / 16;
+        int32_t e = (int32_t)c->avg - (int32_t)(target << 8);
+        c->isum += e;
+        int32_t lim = RS_MAX << RS_KI;
+        c->isum = c->isum > lim ? lim : c->isum < -lim ? -lim : c->isum;
+        step += rs_clamp((c->isum >> RS_KI) + (e >> RS_KP));
     }
     uint8_t *p = buf;
+    uint32_t frac = c->frac;
     for (unsigned f = 0; f < n; f++) {
-        const int16_t *s = 0;
+        const int16_t *s = 0, *t = 0;
+        int32_t h = (int32_t)(frac >> 1);   /* weight of t, 15 bit */
         if (c->primed) {
-            if (avail) {s = &g->data[rd * DEV_OUTS]; rd = (rd + 1u) % size; avail--;}
-            else {c->primed = 0; c->xruns++;}
+            if (avail >= 2u) {
+                s = &g->data[rd * DEV_OUTS];
+                t = &g->data[((rd + 1u) % size) * DEV_OUTS];
+                frac += (uint32_t)step;
+                rd = (rd + (frac >> 16)) % size; avail -= frac >> 16; frac &= 0xffffu;
+            } else {c->primed = 0; c->xruns++;}
         }
         for (unsigned ch = 0; ch < c->nrch; ch++) {
-            int16_t v = s && ch < DEV_OUTS ? s[ch] : 0;
+            int16_t v = 0;
+            if (s && ch < DEV_OUTS) v = (int16_t)(s[ch] + (((int32_t)t[ch] - s[ch]) * h >> 15));
             for (unsigned b = 0; b + 2u < c->subslot; b++) *p++ = 0;
             *p++ = (uint8_t)v; *p++ = (uint8_t)((uint16_t)v >> 8);
         }
     }
+    c->frac = frac;
     c->rd = rd;
     c->len = (uint16_t)(p - buf);
 }
@@ -408,6 +429,7 @@ uint8_t host_requests(void *phost)
         c->primed = 0;
         c->blocks_seen = ring_of(c)->blocks;
         c->m7_frames = ring_of(c)->spare1[1];
+        c->frac = 0; c->isum = 0;
         routes(c);
         c->open = 1;
         set_state(ST_SEND);
