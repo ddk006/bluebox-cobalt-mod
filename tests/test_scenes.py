@@ -839,16 +839,34 @@ if CV:
   for f in range(8):u.mem_write(ENGINE+0x78c0+f*12+i*2,struct.pack('<h',v))
  w32(u,0x3000a894,ENGINE)
  for i in range(6):cvset(i,0)
- call(u,0x8120264,SETTINGS,0x297,3);mainpass(dt=5)
- check(u32(u,field(XPOS))==63,'X-Fade CV3 +-5V: 0 V is the middle (63)')
- cvset(2,2000);mainpass(dt=5);check(u32(u,field(XPOS))==127,'CV3 at +5 V (2000): B (127)')
- cvset(2,-2000);mainpass(dt=5);check(u32(u,field(XPOS))==0,'CV3 at -5 V: A (0)')
- cvset(2,-1990);mainpass(dt=5);check(u32(u,field(XPOS))==0,'CV noise within 2 steps leaves the fader')
- touch(1,64+92,FY);touch(0);cvset(2,-1985);mainpass(dt=5)
+ def settle(v,n=40,noise=0):
+  for k in range(n):cvset(2,v+(noise if k&1 else -noise));mainpass(dt=5)
+ call(u,0x8120264,SETTINGS,0x297,3);settle(0)
+ check(u32(u,field(XPOS))==64,'X-Fade CV3 +-5V: 0 V is the middle (64)')
+ settle(2000);check(u32(u,field(XPOS))==127,'CV3 at +5 V (2000): B (127)')
+ settle(-2000);check(u32(u,field(XPOS))==0,'CV3 at -5 V: A (0)')
+ moved=[]
+ for k in range(200):cvset(2,-1960+(40 if k&1 else -40));mainpass(dt=5);moved.append(u32(u,field(XPOS)))
+ check(set(moved)=={0},'CV noise of +-40 (1.3 steps) near A: the fader stays at A (0)')
+ settle(1960);moved=[]
+ for k in range(200):cvset(2,1960+(40 if k&1 else -40));mainpass(dt=5);moved.append(u32(u,field(XPOS)))
+ check(set(moved)=={127},'and near B: stays at B (127)')
+ settle(0);moved=[]
+ for k in range(260):
+  cvset(2,(60 if k%3==0 else -45));mainpass(dt=5)
+  if k>=60:moved.append(u32(u,field(XPOS)))   # after the filter has settled on the noise
+ check(len(set(moved))==1,'CV noise of about 2 steps in the middle: the fader does not move ('+str(sorted(set(moved)))+')')
+ run_until_idle();mid=lvl();tset(u,0,0x4,-2000)
+ for k in range(200):cvset(2,(60 if k%3==0 else -45));mainpass(dt=5)
+ check(mid not in (-2000,) and lvl()==-2000,'an edit between A and B stays while the CV only rattles')
+ seen=[]
+ for k in range(60):cvset(2,k*10);mainpass(dt=5);seen.append(u32(u,field(XPOS)))
+ check(seen==sorted(seen) and 75<=seen[-1]<=90 and lvl()!=-2000,'a slow real move (0 to 590): the fader follows step by step ('+str(seen[-1])+') and rewrites the edited value')
+ settle(590);touch(1,64+92,FY);touch(0);settle(590,noise=30)
  check(u32(u,field(XPOS))==63,'a resting CV leaves a touched fader alone')
- call(u,0x8120264,SETTINGS,0x297,9);cvset(2,1000);mainpass(dt=5)
- check(u32(u,field(XPOS))==63,'X-Fade CV3 0-5V: 2.5 V is the middle')
- cvset(2,0);mainpass(dt=5);check(u32(u,field(XPOS))==0,'and 0 V is A')
+ call(u,0x8120264,SETTINGS,0x297,9);settle(1000)
+ check(u32(u,field(XPOS))==64,'X-Fade CV3 0-5V: 2.5 V is the middle')
+ settle(0);check(u32(u,field(XPOS))==0,'and 0 V is A')
  tap(150,36);mainpass(dt=5);cvset(4,300);mainpass(dt=5);check(u32(u,field(XLEARN))!=0,'LEARN: a small CV move (300) is not learned')
  cvset(4,-900);mainpass(dt=5)
  check(u32(u,field(XLEARN))==0 and sget(0x297)==11 and u32(u,field(8))==(11<<8|5),'LEARN: CV5 moving by 900 becomes X-Fade CV5, keeping 0-5V ("X-FADE CV 5")')

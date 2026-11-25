@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **X-Fade CV against noise (eurorack):** the CV is low-pass filtered and
+  moves the fader only once it leaves a hysteresis band of 1.5 steps; the
+  outer 2 steps at each end give A or B. A resting, noisy CV no longer
+  moves the fader, so an edit made between A and B (or at an end) stays
+  until the CV really moves.
 - **USB audio out channels (eurorack):** TOOLS > **USB Audio Out** switches
   each of the 18 USB channels On or Off (`usbch1`-`usbch18`). Only those On
   are sent and the device reports that many (UAC2 config descriptor edited in

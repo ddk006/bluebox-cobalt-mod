@@ -1094,6 +1094,9 @@ struct sc_bank {
     uint32_t base_ok,ndiff,diff_dirty,xf_full,xf_live,scan;
     int32_t base[SC_MAX];
     uint16_t diff[SC_MAX];
+    /* x4: X-Fade CV filtered (16ths of an ADC count) and the value that moves
+     * the fader (follows the filtered one with hysteresis), see xf_cv */
+    int32_t xf_cvf,xf_cva;
 };
 struct sc_ptr {uint32_t magic;struct sc_bank *bank;};
 #define SC_PTR ((volatile struct sc_ptr *)0x38800fd0u)
@@ -1279,6 +1282,9 @@ static void sc_fader(uint32_t value) {xf_set_pos(value);}
 #define XF_CV_RING 0x78c0u
 #define XF_CV_FRAMES 0x7938u
 #define XF_CV_FULL 2000
+#define XF_CV_IIR 4  /* low-pass: each reading moves the filtered CV by a quarter of the difference */
+#define XF_CV_HYST 6 /* hysteresis band in quarter fader steps (1.5 steps) */
+#define XF_CV_END 2  /* fader steps at each end that still give A or B */
 static int xf_learning(void) {struct sc_bank *b=sc_bank();return b && b->xf_learn;}
 static void xf_learn_end(struct sc_bank *b,unsigned kind,unsigned n) {
     b->xf_learn=0;b->xf_draw=1;
@@ -1330,13 +1336,21 @@ static void xf_cv(uint32_t now) {
         return;
     }
     if(!sel || sel>12u || b->xf_off){b->xf_cvpos=XF_CV_NONE;return;}
-    int32_t x=v[(sel-1u)%6u];
-    int p=sel<=6u ? (int)((x+XF_CV_FULL)*127/(2*XF_CV_FULL)) : (int)(x*127/XF_CV_FULL);
+    int32_t x=v[(sel-1u)%6u]*16,lo=sel<=6u ? -XF_CV_FULL*16 : 0,span=XF_CV_FULL*16-lo;
+    /* Against noise: a low-pass (XF_CV_IIR), then hysteresis of XF_CV_HYST
+     * fader steps (the value only follows once the CV leaves the band), and
+     * the fader range shrunk at both ends by the band and XF_CV_END steps, so
+     * both ends are reached (also by a CV a little short of 5 V) and held. A resting CV gives no new position: an edit made with
+     * the fader between A and B stays until the CV really moves, and touch
+     * and CC still work. */
+    int32_t h=span*XF_CV_HYST/(127*4);
+    if(b->xf_cvpos==XF_CV_NONE || sel!=b->xf_cvsel){b->xf_cvf=x;b->xf_cva=x;}
+    else b->xf_cvf+=(x-b->xf_cvf)/XF_CV_IIR;
+    if(b->xf_cvf>b->xf_cva+h)b->xf_cva=b->xf_cvf-h;
+    else if(b->xf_cvf<b->xf_cva-h)b->xf_cva=b->xf_cvf+h;
+    int32_t m=h+span*XF_CV_END/127,in=span-2*m,p=((b->xf_cva-lo-m)*127+in/2)/in; /* at most 64000*127: fits */
     unsigned pos=p<0 ? 0u : p>127 ? 127u : (unsigned)p;
-    /* Only a move of the CV moves the fader (2 steps against noise, the ends
-     * exactly), so touch and CC still work while the CV rests. */
-    int d=(int)pos-(int)b->xf_cvpos;
-    if(b->xf_cvpos==XF_CV_NONE || sel!=b->xf_cvsel || d>=2 || d<=-2 || (pos!=b->xf_cvpos && (pos==0u || pos==127u))){
+    if(b->xf_cvpos==XF_CV_NONE || sel!=b->xf_cvsel || pos!=b->xf_cvpos){
         b->xf_cvpos=pos;b->xf_cvsel=sel;
         xf_set_pos(pos);
     }
