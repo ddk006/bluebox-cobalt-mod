@@ -13,7 +13,9 @@
   resampler (linear interpolation, PI control on the fill, up to 3 %): the
   M7 writes 48224 frames a second against the S-4's 48000, which the old
   skip-or-double correction (about 300 ppm) could not follow ("OK, gaps",
-  distorted). "No memory" shows the free
+  distorted). DEV Audio **Audio sync**: no resampling, the frames per packet
+  follow the M7 (for a DEV port USB clock that is off); DEV FB raw shows the
+  USB clock source and the M7 ms per 10000 SOFs. "No memory" shows the free
   heap in DEV FB raw. DEV Audio "Ring test": the M7 writes a 1 kHz sine
   into the ring instead (checks that path alone). DEV Pkts "OK, no input" / "OK, gaps".
   Settings capacity 192, definition table 0x2bb records.
