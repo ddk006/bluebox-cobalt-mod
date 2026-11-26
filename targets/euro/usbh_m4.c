@@ -83,6 +83,12 @@ struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts
 #define MODE_SYNC 6u   /* "Audio sync": as Audio without resampling; the frames per packet follow the M7 instead */
 #define MODE_LAST MODE_SYNC
 #define RCC_D2CCIP2R (*(volatile uint32_t *)0x58024454u)   /* USBSEL bits 21:20: 1 PLL1Q, 2 PLL3Q, 3 HSI48 */
+#define RCC_APB1HENR (*(volatile uint32_t *)0x580240ecu)   /* bit 1 CRSEN */
+#define CRS_CR (*(volatile uint32_t *)0x40008400u)         /* bit 6 AUTOTRIMEN, bits 13:8 TRIM (HSI48, reset 32) */
+#define TRIM_SOFS 4000u   /* SOFs per HSI48 trim step check */
+#define TRIM_TOL 3u       /* ms off in TRIM_SOFS before a step (0.075 %; one TRIM step is about 0.14 %) */
+#define TRIM_LO 20u
+#define TRIM_HI 44u
 enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD,
       PK_FBEMPTY, PK_FB44, PK_FB96, PK_NOINPUT, PK_XRUN};
 /* Mode Audio: PK_NOINPUT no blocks from the M7 this second, PK_XRUN the ring
@@ -136,6 +142,7 @@ struct host_ctx {
     int32_t isum;
     int32_t off;   /* the controller's last offset (x65536): Audio steps by it, Audio sync sends that many frames more */
     uint32_t clk_sofs, clk_ms, clk_shown;   /* SOFs and the M7's ms tick since the last 10 s, the last result */
+    uint32_t tr_sofs, tr_ms;   /* the same for the HSI48 trim (hsi48_trim) */
 };
 #define PKT2(c) ((c)->cfg)
 _Static_assert(CFG_MAX >= PKT_MAX, "cfg doubles as pkt2");
@@ -293,6 +300,31 @@ static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n, int resampl
     c->len = (uint16_t)(p - buf);
 }
 
+/* The DEV port's USB clock is HSI48, an RC oscillator the stock firmware does
+ * not trim (no CRS): on Kyrill's bluebox its frames ran 0.32 % long (10032 ms
+ * of the M7 in 10000 SOFs), outside the 0.25 % of full speed, and the device
+ * got too few frames a second (crackling in every mode). In the audio modes
+ * (the M7 writes its ms tick into the ring) the SOFs are compared with the
+ * M7's tick every TRIM_SOFS and the CRS TRIM moved one step towards 1 ms
+ * frames, within TRIM_LO-TRIM_HI. Only with USBSEL HSI48 and automatic
+ * trimming off. The trim stays until reset, also for the sine modes and the
+ * USB port to the computer (same clock). */
+static void hsi48_trim(struct host_ctx *c)
+{
+    if (++c->tr_sofs < TRIM_SOFS) return;
+    uint32_t ms = ring_of(c)->spare1[2], d = ms - c->tr_ms;
+    c->tr_ms = ms; c->tr_sofs = 0;
+    if (((RCC_D2CCIP2R >> 20) & 3u) != 3u || d < TRIM_SOFS - 100u || d > TRIM_SOFS + 100u) return;   /* not HSI48, or the M7 tick not running */
+    RCC_APB1HENR |= 2u;
+    uint32_t cr = CRS_CR;
+    unsigned t = (cr >> 8) & 63u;
+    if (cr & (1u << 6)) return;
+    if (d > TRIM_SOFS + TRIM_TOL && t < TRIM_HI) t++;        /* frames long: HSI48 slow, higher TRIM is faster */
+    else if (d < TRIM_SOFS - TRIM_TOL && t > TRIM_LO) t--;
+    else return;
+    CRS_CR = (cr & ~(63u << 8)) | t << 8;
+}
+
 /* Periodic TX FIFO deep enough for two packets (the one on the bus and the
  * next, see pipe2), stock HS-core layout only: RX 0x200 words at 0, NPTX
  * 0x100 at 0x200, PTX 0xe0 at 0x300 (0x3e0 words used). Then RX 0x100 at 0
@@ -437,6 +469,7 @@ uint8_t host_requests(void *phost)
         c->m7_frames = ring_of(c)->spare1[1];
         c->frac = 0; c->isum = 0; c->off = 0;
         c->clk_sofs = 0; c->clk_ms = ring_of(c)->spare1[2]; c->clk_shown = 0;
+        c->tr_sofs = 0; c->tr_ms = c->clk_ms;
         routes(c);
         c->open = 1;
         set_state(ST_SEND);
@@ -515,6 +548,7 @@ uint8_t host_sof(void *phost)
         if (mode >= MODE_AUDIO && (c->sofs & 7u) == 0u)   /* heartbeat for the M7 (dev_ring.h) */
             LINE->ctx = (uint32_t)ring_of(c) | (c->hb = (uint8_t)((c->hb + 1u) & DEV_HB_MASK));
         if (c->sofs % 100u == 50u) routes(c);
+        if (mode >= MODE_AUDIO) hsi48_trim(c);
         if (mode >= MODE_AUDIO && ++c->clk_sofs >= 10000u) {   /* SOF clock against the M7's ms tick */
             uint32_t ms = ring_of(c)->spare1[2];
             c->clk_shown = ms - c->clk_ms > 99999u ? 99999u : ms - c->clk_ms;
@@ -532,9 +566,9 @@ uint8_t host_sof(void *phost)
             c->blocks_seen = blocks;
             c->xruns = 0;
             uint32_t m7 = ring_of(c)->spare1[1];
-            /* Audio modes: "DEV FB raw:" shows the USB clock source (USBSEL) x 100000 + the M7's ms in the last 10000 SOFs
+            /* Audio modes: "DEV FB raw:" shows the HSI48 TRIM x 100000 + the M7's ms in the last 10000 SOFs
              * (10000 when the DEV port's frames are 1 ms long); before the first 10 s the frames the M7 wrote this second. */
-            uint32_t show = c->clk_shown ? ((RCC_D2CCIP2R >> 20) & 3u) * 100000u + c->clk_shown : m7 - c->m7_frames;
+            uint32_t show = c->clk_shown ? ((CRS_CR >> 8) & 63u) * 100000u + c->clk_shown : m7 - c->m7_frames;
             LINE->channels = c->nrch | ((mode >= MODE_AUDIO ? show : c->fb_raw) & 0xffffffu) << 8;
             c->m7_frames = m7;
             c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = c->fb_empty = 0;

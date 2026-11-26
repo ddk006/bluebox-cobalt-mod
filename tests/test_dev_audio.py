@@ -15,6 +15,7 @@ if not SYMS.exists():
 F={f[2]:int(f[0],16) for line in SYMS.read_text().splitlines() if len(f:=line.split())==3}
 
 u=machine(cpu_model=UC_CPU_ARM_CORTEX_M4);u.mem_map(0x40080000,0x1000);w32(u,0x58024454,3<<20)   # RCC (mapped by the harness): USB clock HSI48
+u.mem_map(0x40008000,0x1000);w32(u,0x40008400,32<<8)   # CRS: TRIM 32 (reset)
 PHOST=0x3000ac28;LINE=0x38800ee0;PDATA=0x300000b4;OTG=0x40080000;HEAP=0x30030000
 CTX=HEAP;RING=None   # the block: the context, then the ring (dev_ring.h); RING read from the line after the first Init
 CLASS=0x30000098
@@ -281,7 +282,21 @@ for i in range(12000):
     if i%1000==999:seen.append(u32(u,LINE+0x1c))
 check(seen[1:]==[1]*11 and all((seq[k+1]-seq[k])%1000==1 for k in range(len(seq)-1)) and abs(sum(lens)/len(lens)-48.224)<0.01 and set(lens)<={48,49},
       'DEV Audio Audio sync, 48224 frames per 1000 SOFs: packets of 48 and 49 frames ('+str(sum(lens)/len(lens))+' on average), every frame sent as written, no gap')
-check(abs((u32(u,LINE+0x14)>>8)-310047)<=3,'after 10 s DEV FB raw shows the USB clock source (3 HSI48) x 100000 + the M7 ms in 10000 SOFs (10047: the DEV port frames run long)')
+v=u32(u,LINE+0x14)>>8
+check(abs(v%100000-10047)<=3 and v//100000==(u32(u,0x40008400)>>8)&63 and v//100000>32,'after 10 s DEV FB raw shows the HSI48 TRIM x 100000 + the M7 ms in 10000 SOFs (10047: the DEV port frames run long, TRIM raised: '+str(v)+')')
+# HSI48 trim: SOF period follows TRIM (0.32 % long at 32, about 0.14 % a step).
+call(u,F['host_deinit'],PHOST);w32(u,0x40008400,32<<8);w32(u,LINE+0xc,4);reset(4);call(u,F['host_init'],PHOST);requests();urb[0]=1
+RING=u32(u,LINE+0x18)&~31;t=0.0;trims=[]
+for i in range(40000):
+    t+=1.0032-0.0014*(((u32(u,0x40008400)>>8)&63)-32);w32(u,RING+0x30,int(t))
+    feed(48);call(u,F['host_sof'],PHOST)
+    if i%4000==3999:trims.append((u32(u,0x40008400)>>8)&63)
+v=u32(u,LINE+0x14)>>8
+check(trims[-1]==34 and trims[-4:]==[34]*4 and abs(v%100000-10000)<=5 and v//100000==34 and u32(u,0x580240ec)&2,'HSI48 0.32 % slow: TRIM stepped 32 -> 34 and stays (CRS clock on), DEV FB raw '+str(v)+' (frames now within 0.05 %) '+str(trims))
+w32(u,0x58024454,1<<20);w32(u,0x40008400,32<<8)
+for i in range(8000):feed(48);w32(u,RING+0x30,u32(u,RING+0x30)+2);call(u,F['host_sof'],PHOST)
+check((u32(u,0x40008400)>>8)&63==32,'USB clock from PLL1Q (not HSI48): TRIM left alone')
+w32(u,0x58024454,3<<20)
 w32(u,LINE+0xc,5);del sent[:]
 for i in range(3):feed(48);call(u,F['host_sof'],PHOST)
 check(len(data())==3 and all(len(x[4]) in (960,980) for x in data()) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Ring test: streams from the ring as Audio (the M7 writes the sine)')

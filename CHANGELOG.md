@@ -15,7 +15,9 @@
   skip-or-double correction (about 300 ppm) could not follow ("OK, gaps",
   distorted). DEV Audio **Audio sync**: no resampling, the frames per packet
   follow the M7 (for a DEV port USB clock that is off); DEV FB raw shows the
-  USB clock source and the M7 ms per 10000 SOFs. "No memory" shows the free
+  HSI48 TRIM and the M7 ms per 10000 SOFs. **HSI48 trim:** the DEV port's
+  USB clock (HSI48, untrimmed in stock, measured 0.32 % slow) is trimmed via
+  the CRS against the M7's tick in the audio modes. "No memory" shows the free
   heap in DEV FB raw. DEV Audio "Ring test": the M7 writes a 1 kHz sine
   into the ring instead (checks that path alone). DEV Pkts "OK, no input" / "OK, gaps".
   Settings capacity 192, definition table 0x2bb records.
