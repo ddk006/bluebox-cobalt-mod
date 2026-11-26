@@ -80,6 +80,9 @@ struct host_line {uint32_t magic, mask, format, mode, state, channels, ctx, pkts
 /* mode: 0 Off, 1 sine on 1-2, 2 on 3-4, 3 on all, 4 the bluebox audio as routed. pkts ("DEV Pkts:"), per second: */
 #define MODE_AUDIO 4u
 #define MODE_RING 5u   /* "Ring test": as Audio, but the M7 writes a sine (checks the ring path) */
+#define MODE_SYNC 6u   /* "Audio sync": as Audio without resampling; the frames per packet follow the M7 instead */
+#define MODE_LAST MODE_SYNC
+#define RCC_D2CCIP2R (*(volatile uint32_t *)0x58024454u)   /* USBSEL bits 21:20: 1 PLL1Q, 2 PLL3Q, 3 HSI48 */
 enum {PK_NONE, PK_OK, PK_NOSOF, PK_STUCK, PK_NOTREADY, PK_NYET, PK_ERROR, PK_STALL, PK_NOFB, PK_FBODD,
       PK_FBEMPTY, PK_FB44, PK_FB96, PK_NOINPUT, PK_XRUN};
 /* Mode Audio: PK_NOINPUT no blocks from the M7 this second, PK_XRUN the ring
@@ -131,6 +134,8 @@ struct host_ctx {
      * the fill error (x256 frames x ms). */
     uint32_t frac;
     int32_t isum;
+    int32_t off;   /* the controller's last offset (x65536): Audio steps by it, Audio sync sends that many frames more */
+    uint32_t clk_sofs, clk_ms, clk_shown;   /* SOFs and the M7's ms tick since the last 10 s, the last result */
 };
 #define PKT2(c) ((c)->cfg)
 _Static_assert(CFG_MAX >= PKT_MAX, "cfg doubles as pkt2");
@@ -245,7 +250,7 @@ static void routes(struct host_ctx *c)
 #define RS_KP 4       /* proportional: 16 per frame off (fill x256 >> 4) */
 #define RS_KI 12      /* integral: 1/16 per frame off and ms (sum of fill x256 >> 12) */
 static int32_t rs_clamp(int32_t v) {return v > RS_MAX ? RS_MAX : v < -RS_MAX ? -RS_MAX : v;}
-static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n)
+static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n, int resample)
 {
     struct dev_ring *g = ring_of(c);
     unsigned size = g->frames, target = (size + 36u) / 2u;   /* midway between a packet + an M7 block and the overrun limit */
@@ -260,7 +265,8 @@ static void fill_audio(struct host_ctx *c, uint8_t *buf, unsigned n)
         c->isum += e;
         int32_t lim = RS_MAX << RS_KI;
         c->isum = c->isum > lim ? lim : c->isum < -lim ? -lim : c->isum;
-        step += rs_clamp((c->isum >> RS_KI) + (e >> RS_KP));
+        c->off = rs_clamp((c->isum >> RS_KI) + (e >> RS_KP));
+        if (resample) step += c->off;
     }
     uint8_t *p = buf;
     uint32_t frac = c->frac;
@@ -316,7 +322,7 @@ uint8_t host_init(void *phost)
     struct host_ctx *c = block();
     if (c) c->live = 0;
     l->pkts = PK_NONE;
-    if (l->mode == 0u || l->mode > MODE_RING) return midi_init(phost);   /* DEV Audio Off: the stock class */
+    if (l->mode == 0u || l->mode > MODE_LAST) return midi_init(phost);   /* DEV Audio Off: the stock class */
     uint8_t r = midi_init(phost);
     l->channels = 0;
     struct dev_ring *g = c ? ring_of(c) : 0;
@@ -429,7 +435,8 @@ uint8_t host_requests(void *phost)
         c->primed = 0;
         c->blocks_seen = ring_of(c)->blocks;
         c->m7_frames = ring_of(c)->spare1[1];
-        c->frac = 0; c->isum = 0;
+        c->frac = 0; c->isum = 0; c->off = 0;
+        c->clk_sofs = 0; c->clk_ms = ring_of(c)->spare1[2]; c->clk_shown = 0;
         routes(c);
         c->open = 1;
         set_state(ST_SEND);
@@ -483,7 +490,7 @@ uint8_t host_sof(void *phost)
 {
     struct host_ctx *c = ctx();
     unsigned mode = LINE->mode;
-    if (c && c->open && mode >= 1u && mode <= MODE_RING) {
+    if (c && c->open && mode >= 1u && mode <= MODE_LAST) {
         if (c->fb_open) feedback(phost, c);
         unsigned i = c->open2 ? c->cur : 0u;   /* pipes in turn, one per frame */
         uint8_t pipe = i ? c->pipe2 : c->pipe, *inflight = i ? &c->inflight2 : &c->inflight;
@@ -494,11 +501,12 @@ uint8_t host_sof(void *phost)
             c->cur = (uint8_t)(i ^ 1u);
             if (*inflight) {if (st == 1u) c->done++; else {c->bad++; c->last_bad = st;}}
             c->acc += c->fb;
+            if (mode == MODE_SYNC) c->acc += (uint32_t)((int32_t)(c->fb >> 8) * c->off >> 8);   /* as many frames as the M7 gives */
             unsigned n = c->acc >> 16;
             c->acc -= n << 16;
             if (n > c->nmax) n = c->nmax;
             if (n < FRAMES - 1u) n = FRAMES - 1u;
-            if (mode >= MODE_AUDIO) fill_audio(c, buf, n);
+            if (mode >= MODE_AUDIO) fill_audio(c, buf, n, mode != MODE_SYNC);
             else fill(c, buf, mode, n);
             submit_urb(phost, pipe, 0 /* out */, 1u /* isochronous */, 1u /* data */, buf, c->len, 0);
             *inflight = 1;
@@ -507,6 +515,11 @@ uint8_t host_sof(void *phost)
         if (mode >= MODE_AUDIO && (c->sofs & 7u) == 0u)   /* heartbeat for the M7 (dev_ring.h) */
             LINE->ctx = (uint32_t)ring_of(c) | (c->hb = (uint8_t)((c->hb + 1u) & DEV_HB_MASK));
         if (c->sofs % 100u == 50u) routes(c);
+        if (mode >= MODE_AUDIO && ++c->clk_sofs >= 10000u) {   /* SOF clock against the M7's ms tick */
+            uint32_t ms = ring_of(c)->spare1[2];
+            c->clk_shown = ms - c->clk_ms > 99999u ? 99999u : ms - c->clk_ms;
+            c->clk_ms = ms; c->clk_sofs = 0;
+        }
         if (++c->sofs >= 1000u) {   /* once a second: what happened to the packets */
             uint32_t blocks = ring_of(c)->blocks;
             LINE->pkts = c->bad ? (c->last_bad >= 2u && c->last_bad <= 5u ? PK_NOTREADY + c->last_bad - 2u : PK_ERROR)
@@ -518,8 +531,11 @@ uint8_t host_sof(void *phost)
                        : c->xruns ? PK_XRUN : PK_OK;
             c->blocks_seen = blocks;
             c->xruns = 0;
-            uint32_t m7 = ring_of(c)->spare1[1];   /* mode Audio: "DEV FB raw:" shows the frames the M7 wrote this second (48000) */
-            LINE->channels = c->nrch | ((mode >= MODE_AUDIO ? m7 - c->m7_frames : c->fb_raw) & 0xffffffu) << 8;
+            uint32_t m7 = ring_of(c)->spare1[1];
+            /* Audio modes: "DEV FB raw:" shows the USB clock source (USBSEL) x 100000 + the M7's ms in the last 10000 SOFs
+             * (10000 when the DEV port's frames are 1 ms long); before the first 10 s the frames the M7 wrote this second. */
+            uint32_t show = c->clk_shown ? ((RCC_D2CCIP2R >> 20) & 3u) * 100000u + c->clk_shown : m7 - c->m7_frames;
+            LINE->channels = c->nrch | ((mode >= MODE_AUDIO ? show : c->fb_raw) & 0xffffffu) << 8;
             c->m7_frames = m7;
             c->sofs = c->done = c->bad = c->fb_seen = c->fb_odd = c->fb_empty = 0;
         }
@@ -555,7 +571,7 @@ uint8_t host_deinit(void *phost)
         if (c->fb_open) {close_pipe(phost, c->fb_pipe); free_pipe(phost, c->fb_pipe);}
         if (c->fb_open2) {close_pipe(phost, c->fb_pipe2); free_pipe(phost, c->fb_pipe2);}
     }
-    if (l->mode >= 1u && l->mode <= MODE_RING) {set_state(ST_WAIT); l->channels = 0;}
+    if (l->mode >= 1u && l->mode <= MODE_LAST) {set_state(ST_WAIT); l->channels = 0;}
     l->pkts = PK_NONE;
     return MIDI_PDATA || !c ? midi_deinit(phost) : USBH_OK;
 }

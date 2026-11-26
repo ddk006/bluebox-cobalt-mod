@@ -161,6 +161,7 @@ static void dev_feed(const uint8_t *src, int bytes)
     r->blocks++;
     r->spare1[0] = ph;
     r->spare1[1] += frames;
+    r->spare1[2] = now;   /* the M7's ms tick at this block: the M4 compares its SOFs with it */
     SCB_DCCMVAC = (uint32_t)&r->wr;
     __asm volatile("dsb" ::: "memory");
 }

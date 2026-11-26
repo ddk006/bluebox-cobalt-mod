@@ -405,10 +405,15 @@ block, routed, into a ring in M4 memory (`targets/euro/dev_ring.h`, 256
 frames, or 160 or 128 when the heap is short). The bluebox audio clock is not
 the device's (on the S-4: 48224 frames a second against 48000), so the driver
 reads the ring through a resampler (linear interpolation, step set by a PI
-controller on the ring fill, up to 3 % off). With "No memory" DEV FB raw shows the free heap in bytes. **Ring test**
+controller on the ring fill, up to 3 % off). **Audio sync** (DEV Audio) does
+not resample: it sends per packet as many frames as the M7 gives (48 or 49),
+for when the DEV port's own USB clock is the one that is off. In the audio
+modes DEV FB raw shows after 10 s the USB clock source (RCC USBSEL: 1 PLL1Q,
+2 PLL3Q, 3 HSI48) x 100000 plus the M7 milliseconds in 10000 SOFs (10000 when
+the DEV port's frames are exactly 1 ms); before that the frames the M7 wrote
+in the last second. With "No memory" DEV FB raw shows the free heap in bytes. **Ring test**
 (DEV Audio) lets the M7 write a 1 kHz sine into the ring instead of the audio:
-it checks the M7 -> M4 path on its own. In Audio and Ring test, DEV FB raw shows
-the frames the M7 wrote in the last second (48000 at 48 kHz). DEV Pkts then also says "OK, no input" (nothing
+it checks the M7 -> M4 path on its own. DEV Pkts then also says "OK, no input" (nothing
 from the M7) or "OK, gaps" (the ring ran empty). Default Off: the port then works as stock. Code:
 `targets/euro/usbh_m4.c`.
 

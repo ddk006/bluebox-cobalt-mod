@@ -31,7 +31,8 @@ struct dev_ring {
     uint8_t route[DEV_OUTS];
     uint8_t spare0[32 - 12 - DEV_OUTS];
     /* line 1, M7: frames written (mod frames), blocks written; spare1[0] the
-     * Ring test sine phase, spare1[1] all frames written (diagnostics) */
+     * Ring test sine phase, spare1[1] all frames written, spare1[2] the M7's
+     * ms tick at the last block (diagnostics) */
     uint32_t wr, blocks, spare1[6];
     int16_t data[];   /* frames x DEV_OUTS */
 };

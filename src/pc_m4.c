@@ -45,7 +45,7 @@ static void xf_cv(uint32_t now);
 #define PC_USB_CH 0x299u /* USB page "1 Track 1:".."18 Out Bus:" (keys usbch1..usbch18): 0 Off, 1 On; 0x299..0x2aa */
 #define PC_USB_N 18u
 #define PC_USB_FMT 0x2abu /* USB page "Format:" (key usbfmt): 0 24 bit (stock), 1 16 bit */
-#define PC_DEV_AUDIO 0x2acu /* USB page "DEV Audio:" (key devaudio): 0 Off, 1k sine to a device on the DEV port (targets/euro/usbh_m4.c) on 1 channels 1-2, 2 channels 3-4, 3 all; 4 Audio: the bluebox channels as DEV 1-10 route them; 5 Ring test: as Audio, the M7 writes a 1k sine instead (checks the M7 -> M4 ring) */
+#define PC_DEV_AUDIO 0x2acu /* USB page "DEV Audio:" (key devaudio): 0 Off, 1k sine to a device on the DEV port (targets/euro/usbh_m4.c) on 1 channels 1-2, 2 channels 3-4, 3 all; 4 Audio: the bluebox channels as DEV 1-10 route them; 5 Ring test: as Audio, the M7 writes a 1k sine instead (checks the M7 -> M4 ring); 6 Audio sync: as Audio, frames per packet follow the M7 instead of resampling */
 #define PC_DEV_STATE 0x2adu /* USB page "DEV State:" (key devstate): shown only, set from the driver */
 #define PC_DEV_CH 0x2aeu /* USB page "DEV Ch:" (key devch): the device's OUT channels, shown only */
 #define PC_DEV_PKTS 0x2afu /* USB page "DEV Pkts:" (key devpkts): last second's packet result, shown only */
@@ -220,8 +220,8 @@ void pc_defs_hook(void *table,unsigned id,unsigned type,const char *label,int mi
     for(unsigned i=0;i<PC_USB_N;i++)def_enum(table,PC_USB_CH+i,usb_label[i],on_off,2,usb_key[i]);
     static const char *const usb_fmt[2]={"24 bit","16 bit"};
     def_enum(table,PC_USB_FMT,"Format:",usb_fmt,2,"usbfmt");
-    static const char *const dev_audio[6]={"Off","Sine 1-2","Sine 3-4","Sine all","Audio","Ring test"};
-    def_enum(table,PC_DEV_AUDIO,"DEV Audio:",dev_audio,6,"devaudio");
+    static const char *const dev_audio[7]={"Off","Sine 1-2","Sine 3-4","Sine all","Audio","Ring test","Audio sync"};
+    def_enum(table,PC_DEV_AUDIO,"DEV Audio:",dev_audio,7,"devaudio");
     static const char *const dev_state[8]={"Off","Waiting","No audio","Starting","Sending","Error","No memory","Too big"};
     def_enum(table,PC_DEV_STATE,"DEV State:",dev_state,8,"devstate");
     static const char *const dev_ch[33]={"-","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
@@ -451,7 +451,7 @@ void pc_main(void *inputs) {
         for(unsigned i=0;i<PC_USB_N;i++)if(fw_get(PC_SETTINGS,PC_USB_CH+i))mask|=1u<<i;
         volatile struct pc_usb *u=PC_USB_OUT;
         u->mask=mask;u->format=fw_get(PC_SETTINGS,PC_USB_FMT)?1u:0u;u->magic=PC_USB_MAGIC;
-        unsigned dev=(unsigned)fw_get(PC_SETTINGS,PC_DEV_AUDIO);if(dev>5u)dev=0;
+        unsigned dev=(unsigned)fw_get(PC_SETTINGS,PC_DEV_AUDIO);if(dev>6u)dev=0;
         if((u->dev_mode!=0u)!=(dev!=0u)){u->dev_state=dev?1u:0u;u->dev_ch=0;u->dev_pkts=0;} /* Waiting until a device starts */
         u->dev_mode=dev;
         unsigned st=dev && u->dev_state<8u?u->dev_state:0u,ch=dev && (u->dev_ch&0xffu)<=32u?u->dev_ch&0xffu:0u,fb=dev?u->dev_ch>>8:0u,pk=dev && u->dev_pkts<15u?u->dev_pkts:0u;

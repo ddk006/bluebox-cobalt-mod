@@ -14,7 +14,7 @@ if not SYMS.exists():
     print('PASS DEV port audio is eurorack only: no payload in this build');print('1 DEV port audio checks passed');raise SystemExit(0)
 F={f[2]:int(f[0],16) for line in SYMS.read_text().splitlines() if len(f:=line.split())==3}
 
-u=machine(cpu_model=UC_CPU_ARM_CORTEX_M4);u.mem_map(0x40080000,0x1000)
+u=machine(cpu_model=UC_CPU_ARM_CORTEX_M4);u.mem_map(0x40080000,0x1000);w32(u,0x58024454,3<<20)   # RCC (mapped by the harness): USB clock HSI48
 PHOST=0x3000ac28;LINE=0x38800ee0;PDATA=0x300000b4;OTG=0x40080000;HEAP=0x30030000
 CTX=HEAP;RING=None   # the block: the context, then the ring (dev_ring.h); RING read from the line after the first Init
 CLASS=0x30000098
@@ -268,6 +268,20 @@ drift(7,20,'the bluebox clock 140 ppm fast against the device')
 drift(-7,20,'and 140 ppm slow')
 drift(224,10,'48224 frames a second (measured on the S-4, 4700 ppm fast)')
 drift(-1000,10,'2 % slow')
+# Audio sync: no resampling, the frames per packet follow the M7. The M7's ms tick runs 0.47 % fast against the SOFs here
+# (DEV port frames 1.0047 ms long); 48224 frames per 1000 SOFs.
+w32(u,LINE+0xc,6);call(u,F['host_deinit'],PHOST);reset(6);call(u,F['host_init'],PHOST);requests();urb[0]=1
+RING=u32(u,LINE+0x18)&~31;seen=[];seq=[];lens=[];acc=0
+for i in range(12000):
+    acc+=48224
+    while acc>=32000:feed(32);acc-=32000
+    w32(u,RING+0x30,i*10047//10000)
+    del sent[:];call(u,F['host_sof'],PHOST);p=data()[0][4]
+    if i>=2000:seq+=[smp(p,f,0)-1000 for f in range(len(p)//20)];lens.append(len(p)//20)
+    if i%1000==999:seen.append(u32(u,LINE+0x1c))
+check(seen[1:]==[1]*11 and all((seq[k+1]-seq[k])%1000==1 for k in range(len(seq)-1)) and abs(sum(lens)/len(lens)-48.224)<0.01 and set(lens)<={48,49},
+      'DEV Audio Audio sync, 48224 frames per 1000 SOFs: packets of 48 and 49 frames ('+str(sum(lens)/len(lens))+' on average), every frame sent as written, no gap')
+check(abs((u32(u,LINE+0x14)>>8)-310047)<=3,'after 10 s DEV FB raw shows the USB clock source (3 HSI48) x 100000 + the M7 ms in 10000 SOFs (10047: the DEV port frames run long)')
 w32(u,LINE+0xc,5);del sent[:]
 for i in range(3):feed(48);call(u,F['host_sof'],PHOST)
 check(len(data())==3 and all(len(x[4]) in (960,980) for x in data()) and u32(u,LINE+0x18)&~31==RING,'DEV Audio Ring test: streams from the ring as Audio (the M7 writes the sine)')
